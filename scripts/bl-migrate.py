@@ -13,6 +13,7 @@
                                      заметки = tasks.md, ссылка на каталог
   строка отложки state: waiting    → Backlog: Due = review_by, в описании
                                      «почему не сейчас» и блок пробы ```when
+  строка отложки state: taken      → To Do (взята, но не доделана)
   строка отложки state: done       → пропуск
   хендоффы всех ворктри            → To Do «Недопилено», ТОЛЬКО если ветка
     (.claude/handoff/*.md и          из его шапки жива (есть и не влита в
@@ -93,7 +94,8 @@ def plan_waiting(dirs, entry):
     for base in dirs:
         for f in sorted(pathlib.Path(base).expanduser().glob("*.md")):
             fields, body = frontmatter(f.read_text(encoding="utf-8"))
-            if not fields.get("title") or fields.get("state") != "waiting":
+            state = fields.get("state")
+            if not fields.get("title") or state not in ("waiting", "taken"):
                 continue
             if entry and entry not in fields.get("entry", ""):
                 continue
@@ -107,8 +109,11 @@ def plan_waiting(dirs, entry):
                 parts.append("```when\n" + "\n".join(head) + "\n---\n"
                              + fields["probe"].rstrip() + "\n```")
             parts.append(f"Перенесено из отложки `{f.name}`.\n\n" + body.strip())
-            yield ("backlog", fields["title"], "\n\n".join(parts),
-                   fields.get("review_by"))
+            if state == "taken":   # взято, но не доделано — это работа, а не отложка
+                yield ("todo-taken", fields["title"], "\n\n".join(parts), None)
+            else:
+                yield ("backlog", fields["title"], "\n\n".join(parts),
+                       fields.get("review_by"))
 
 
 def worktrees():
@@ -241,7 +246,8 @@ def main():
                 print(f"  ❌ {p.stderr}", file=sys.stderr)
         else:
             _, _, desc, due = it
-            argv = ["backlog", "task", "create", title, "-s", "Backlog",
+            status = "To Do" if kind == "todo-taken" else "Backlog"
+            argv = ["backlog", "task", "create", title, "-s", status,
                     "-l", LABEL, "-d", desc, "--plain"]
             if due and re.match(r"\d{4}-\d{2}-\d{2}$", due):
                 argv += ["--due-date", due]
