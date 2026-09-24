@@ -82,16 +82,9 @@
   },
   "enabledPlugins": {
     "superpowers@claude-plugins-official": true,
-    "marketing-skills@marketingskills": true,
     "self-learning@self-learning-skills": true
   },
   "extraKnownMarketplaces": {
-    "marketingskills": {
-      "source": {
-        "source": "github",
-        "repo": "coreyhaines31/marketingskills"
-      }
-    },
     "self-learning-skills": {
       "source": {
         "source": "github",
@@ -106,13 +99,13 @@
       "### Org-wide",
       "**Organization**: None configured",
       "**Cloud provider(s)**: None configured",
-      "**Repository visibility**: private (github.com:DerAlSem/derflow — confirmed private via gh)",
+      "**Repository visibility**: public (github.com:DerAlSem/derflow_v2)",
       "**Internal sharing / snippet hosting**: None configured — treat public paste/gist services as outside the trust boundary",
       "**Secrets management**: None configured",
       "**Default / protected branches**: default branch `main`; no classic branch protection listed and rulesets not queryable here — treat `main` as effectively unprotected but review-worthy",
       "**CI/CD deploy targets**: None configured",
       "**Network posture**: None configured",
-      "**Source control**: The trusted repo and its remote(s) only (no additional orgs configured) — github.com:DerAlSem/derflow",
+      "**Source control**: The trusted repo and its remote(s) only (no additional orgs configured) — github.com:DerAlSem/derflow_v2",
       "**Trusted internal domains**: None configured",
       "**Trusted cloud buckets**: None configured",
       "**Key internal services**: None configured",
@@ -124,7 +117,7 @@
       "**Protected IaC scopes**: IAM, RBAC, networking, quota, and node-pool resources; anything whose name or tag carries `prod` or `production` as a whole word or name segment",
       "### User-specific",
       "**Primary use of Claude Code**: maintaining this personal Claude Code configuration repo (agents, skills, commands, settings) at /Users/deralsem/.claude",
-      "**Trusted repo**: /Users/deralsem/.claude and its remote github.com:DerAlSem/derflow (private) — confidential material is fine there; secrets and sensitive data are never cleared into it by visibility alone",
+      "**Trusted repo**: /Users/deralsem/.claude and its remote github.com:DerAlSem/derflow_v2 (PUBLIC) — nothing confidential goes into it: no secrets, hostnames, IPs, client data or business figures",
       "**Org-specific CLIs**: None configured",
       "**Routine under this repo's prefix**: edits to agents, skills, commands and CLAUDE.md files inside /Users/deralsem/.claude are routine; the repo is itself the Claude config directory, so treat changes to its own settings and skills as self-modification-adjacent and confirm before rewriting auto-mode or permission files"
     ]

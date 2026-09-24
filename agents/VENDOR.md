@@ -14,7 +14,7 @@
 
 | Класс | Что | Механизм |
 |---|---|---|
-| **Плагины** | `superpowers`, `marketing-skills`, `self-learning` | объявлены в `settings.json` → `enabledPlugins` + `extraKnownMarketplaces`; код в `plugins/` (не версионируется), обновление через `/plugin` |
+| **Плагины** | `superpowers`, `self-learning` (`marketing-skills` снят в v5.0) | объявлены в `settings.json` → `enabledPlugins` + `extraKnownMarketplaces`; код в `plugins/` (не версионируется), обновление через `/plugin` |
 | **Своё** | `skills/derflow`, `explore-code`, `audit-code`, `adopt-code`, `_orient-engine.md`, `_conformance-sweep.md`, `agents/gap-finder.md` | живёт здесь, версионируется, источник — этот репо |
 | **Вендоренное** | 8 агентов + `skills/make-interfaces-feel-better` | скопировано и **закреплено намеренно** (см. решение ниже), обновление ручное по рецепту |
 
@@ -138,3 +138,12 @@
    `extraKnownMarketplaces`) — их код в `plugins/` не версионируется намеренно.
 3. Вендоренное приедет вместе с репо (оно здесь и живёт) — переустанавливать
    ниоткуда не надо.
+
+## v5.0 (derflow_v2, 24.09.2026): исполнители на Sonnet
+
+`python-pro` и `frontend-developer` переведены с `model: inherit` на
+`model: sonnet`, их `description` ужат до двух строк. Причина: описания агентов
+грузятся в каждую сессию, а `inherit` сажал исполнителей на Opus вместе с
+оркестратором. Критики (`system-architect`, `gap-finder`, `ui-ux-designer`)
+остаются на `inherit`: их ценность в более сильной модели. При обновлении
+вендорской копии эти две правки накатываются заново.
