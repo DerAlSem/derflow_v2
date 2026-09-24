@@ -68,14 +68,22 @@ def plan_specs(root):
         yield ("doc", cap, spec.read_text(encoding="utf-8"))
 
 
+def change_is_complete(tasks_text):
+    return "- [x]" in tasks_text and "- [ ]" not in tasks_text
+
+
 def plan_changes(root):
     ch = root / "openspec" / "changes"
     for d in sorted(p for p in ch.glob("*") if p.is_dir() and p.name != "archive"):
-        prop = d / "proposal.md"
-        tasks = d / "tasks.md"
+        prop, tasks, hand = d / "proposal.md", d / "tasks.md", d / "HANDOFF.md"
         desc = prop.read_text(encoding="utf-8") if prop.exists() else ""
         notes = tasks.read_text(encoding="utf-8") if tasks.exists() else ""
-        yield ("todo", d.name, desc, notes, str(d.relative_to(root)))
+        if hand.exists():
+            notes += "\n\n## Хендофф\n\n" + hand.read_text(encoding="utf-8", errors="replace")
+        title = d.name
+        if change_is_complete(notes):
+            title = f"Дозакрыть: {d.name}"   # задачи сделаны, заявка не заархивирована
+        yield ("todo", title, desc, notes, str(d.relative_to(root)))
 
 
 def plan_waiting(dirs, entry):
@@ -114,26 +122,46 @@ def head_field(text, name):
     return m.group(1).strip() if m else ""
 
 
-def plan_handoffs():
-    seen = set()
+def plan_handoffs(root):
+    """Хендоффы, которых нет в текущем дереве.
+
+    `.claude/handoff/*.md` не в git — у каждого ворктри свои; дубли по
+    содержимому схлопываются. `openspec/changes/*/HANDOFF.md` в git: копия в
+    каждом ворктри одна и та же, поэтому берётся только заявка, которой нет в
+    текущем дереве (живёт лишь на своей ветке), и одна на id — самая свежая.
+    """
+    import hashlib
+    here = {p.name for p in (root / "openspec" / "changes").glob("*")} \
+        | {p.name.split("-", 3)[-1] for p in (root / "openspec" / "changes" / "archive").glob("*")}
+    seen_text, by_change = set(), {}
+    out = []
     for wt in worktrees():
-        files = list((wt / ".claude" / "handoff").glob("*.md")) \
-            + list((wt / "openspec" / "changes").glob("*/HANDOFF.md"))
-        for f in sorted(files):
-            if f.resolve() in seen:
-                continue
-            seen.add(f.resolve())
+        for f in sorted((wt / ".claude" / "handoff").glob("*.md")):
             text = f.read_text(encoding="utf-8", errors="replace")
-            branch = head_field(text, "ветка").split()[0:1]
-            branch = branch[0] if branch else "?"
-            name = head_field(text, "имя") or f.stem
-            title = f"Недопилено: {name}"
-            desc = (f"Сессия остановлена до переезда на docflow.\n\n"
-                    f"Ветка: `{branch}` · ворктри: `{wt}`\n"
-                    f"Хендофф: `{f}` (в заметках — полная копия).\n\n"
-                    f"Продолжать: `bl-lock.sh take` в этом ворктри, дальше "
-                    f"по заметкам.")
-            yield ("handoff", title, desc, text, str(f))
+            h = hashlib.sha1(text.encode()).hexdigest()
+            if h in seen_text:
+                continue
+            seen_text.add(h)
+            out.append((wt, f, text))
+        for f in (wt / "openspec" / "changes").glob("*/HANDOFF.md"):
+            cid = f.parent.name
+            if cid in here:
+                continue
+            m = f.stat().st_mtime
+            if cid not in by_change or m > by_change[cid][0]:
+                by_change[cid] = (m, wt, f)
+    for _, wt, f in by_change.values():
+        out.append((wt, f, f.read_text(encoding="utf-8", errors="replace")))
+    for wt, f, text in out:
+        branch = head_field(text, "ветка").split()[0:1]
+        branch = branch[0] if branch else "?"
+        name = head_field(text, "имя") or (f.parent.name if f.name == "HANDOFF.md" else f.stem)
+        desc = (f"Сессия остановлена до переезда на docflow.\n\n"
+                f"Ветка: `{branch}` · ворктри: `{wt}`\n"
+                f"Хендофф: `{f}` (в заметках — полная копия).\n\n"
+                f"Продолжать: `bl-lock.sh take` в этом ворктри, дальше "
+                f"по заметкам.")
+        yield ("handoff", f"Недопилено: {name}", desc, text, str(f))
 
 
 def main():
@@ -151,7 +179,7 @@ def main():
     items = list(plan_specs(root)) + list(plan_changes(root)) \
         + list(plan_waiting(a.waiting, "")) \
         + list(plan_waiting(a.global_waiting, a.entry or "\0")) \
-        + list(plan_handoffs())
+        + list(plan_handoffs(root))
     n = 0
     for it in items:
         kind, title = it[0], it[1]
@@ -194,7 +222,11 @@ def main():
             p = run(argv)
             if p.returncode:
                 print(f"  ❌ {p.stderr}", file=sys.stderr)
-    print(f"\n{'перенесено' if a.apply else 'к переносу'}: {n}"
+    from collections import Counter
+    c = Counter(("todo-дозакрыть" if it[0] == "todo" and it[1].startswith("Дозакрыть:") else it[0])
+                for it in items if it[1] not in have)
+    print("\nпо видам: " + ", ".join(f"{k} {v}" for k, v in sorted(c.items())))
+    print(f"{'перенесено' if a.apply else 'к переносу'}: {n}"
           + ("" if a.apply else "  (запусти с --apply)"))
     return 0
 
