@@ -65,6 +65,40 @@ def frontmatter(text):
     return fields, m.group(2)
 
 
+def _waiting_module():
+    """Парсер строк отложки — настоящий, из waiting.py: значения в кавычках там
+    экранированы (`\\\\` → `\\`, `\\"` → `"`), а ripe_match — регулярка.
+    Свой упрощённый парсер это терял (урок 24.09.2026)."""
+    import importlib.util
+    path = pathlib.Path(__file__).resolve().parent / "waiting.py"
+    spec = importlib.util.spec_from_file_location("waiting_rows", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def read_row(path):
+    text = path.read_text(encoding="utf-8")
+    fields, err = _waiting_module().parse_front(text)
+    if err:
+        return None, text
+    _, body = frontmatter(text)
+    return {k: v.value for k, v in fields.items()}, body
+
+
+def when_block(fields):
+    """Блок ```when из строки отложки; None, если пробы нет."""
+    if fields.get("probe", "none").strip() in ("none", ""):
+        return None
+    head = [f"host: {fields.get('host', 'local')}"]
+    if fields.get("cwd", "none") != "none":
+        head.append(f"cwd: {fields['cwd']}")
+    if fields.get("ripe_match", "none") != "none":
+        head.append(f"match: {fields['ripe_match']}")   # уже регулярка
+    return ("```when\n" + "\n".join(head) + "\n---\n"
+            + fields["probe"].rstrip() + "\n```")
+
+
 def plan_specs(root):
     for spec in sorted((root / "openspec" / "specs").glob("*/spec.md")):
         cap = spec.parent.name
@@ -93,27 +127,59 @@ def plan_changes(root):
 def plan_waiting(dirs, entry):
     for base in dirs:
         for f in sorted(pathlib.Path(base).expanduser().glob("*.md")):
-            fields, body = frontmatter(f.read_text(encoding="utf-8"))
+            fields, body = read_row(f)
+            if not fields or not fields.get("title"):
+                continue
             state = fields.get("state")
-            if not fields.get("title") or state not in ("waiting", "taken"):
+            if state not in ("waiting", "taken"):
                 continue
             if entry and entry not in fields.get("entry", ""):
                 continue
             parts = [f"**Почему не сейчас / когда:** {fields.get('ripe_when', '—')}"]
-            if fields.get("probe", "none").strip() not in ("none", ""):
-                head = [f"host: {fields.get('host', 'local')}"]
-                if fields.get("cwd", "none") != "none":
-                    head.append(f"cwd: {fields['cwd']}")
-                if fields.get("ripe_match", "none") != "none":
-                    head.append(f"match: {re.escape(fields['ripe_match'])}")
-                parts.append("```when\n" + "\n".join(head) + "\n---\n"
-                             + fields["probe"].rstrip() + "\n```")
+            blk = when_block(fields)
+            if blk:
+                parts.append(blk)
             parts.append(f"Перенесено из отложки `{f.name}`.\n\n" + body.strip())
             if state == "taken":   # взято, но не доделано — это работа, а не отложка
                 yield ("todo-taken", fields["title"], "\n\n".join(parts), None)
             else:
                 yield ("backlog", fields["title"], "\n\n".join(parts),
                        fields.get("review_by"))
+
+
+def repair_when(dirs, rewrites):
+    """Пересобрать блоки ```when в уже перенесённых задачах из исходных строк.
+
+    Задача узнаётся по «Перенесено из отложки `<файл>`»; блок в файле задачи
+    заменяется целиком. rewrites — пары СТАРОЕ=НОВОЕ для путей внутри проб.
+    """
+    rows = {}
+    for base in dirs:
+        for f in pathlib.Path(base).expanduser().glob("*.md"):
+            rows.setdefault(f.name, f)
+    fixed = missing = 0
+    for task in sorted(pathlib.Path("backlog/tasks").glob("*.md")):
+        text = task.read_text(encoding="utf-8")
+        m = re.search(r"Перенесено из отложки `([^`]+)`", text)
+        if not m or "```when" not in text:
+            continue
+        src = rows.get(m.group(1))
+        if not src:
+            missing += 1
+            print(f"· нет исходной строки {m.group(1)} для {task.name}")
+            continue
+        fields, _ = read_row(src)
+        blk = when_block(fields or {})
+        if not blk:
+            continue
+        for pair in rewrites:
+            old, new = pair.split("=", 1)
+            blk = blk.replace(old, new)
+        new_text = re.sub(r"```when\n.*?\n```", lambda _: blk, text, count=1, flags=re.S)
+        if new_text != text:
+            task.write_text(new_text, encoding="utf-8")
+            fixed += 1
+    print(f"блоков пересобрано: {fixed}; без исходной строки: {missing}")
 
 
 def worktrees():
@@ -189,6 +255,10 @@ def main():
     ap.add_argument("--waiting", action="append", default=[])
     ap.add_argument("--global-waiting", action="append", default=[])
     ap.add_argument("--entry", default="")
+    ap.add_argument("--repair-when", action="append", default=[], metavar="DIR",
+                    help="пересобрать блоки проб из строк отложки в DIR (можно несколько)")
+    ap.add_argument("--rewrite", action="append", default=[], metavar="СТАРОЕ=НОВОЕ",
+                    help="замена пути внутри пробы при --repair-when")
     ap.add_argument("--changes-to", default="To Do", choices=["To Do", "Backlog"],
                     help="куда класть живые заявки; Backlog = с меткой triage")
     ap.add_argument("--base", default="develop",
@@ -196,6 +266,9 @@ def main():
     a = ap.parse_args()
     global BASE
     BASE = a.base
+    if a.repair_when:
+        repair_when(a.repair_when, a.rewrite)
+        return 0
     root = pathlib.Path(run(["git", "rev-parse", "--show-toplevel"]).stdout.strip() or ".")
     if not (root / "backlog").exists():
         print("нет backlog/ — сначала backlog init", file=sys.stderr)
