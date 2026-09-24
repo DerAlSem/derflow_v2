@@ -14,6 +14,19 @@ v3.1 к самому derflow: датированная история не до�
 
 ---
 
+## v5.1 — docflow, пилот на GM+ (24.09.2026)
+
+Новый скилл `docflow`: docs-first поверх Backlog.md (MrLesk, 1.52.0).
+Колонки Backlog / To Do / In Progress / Done; «как устроено» — в
+`backlog/docs/capabilities`, а не в закрытых тикетах. Скрипты:
+`bl-lock.sh` (атомарный замок в общем git-каталоге, виден всем ворктри),
+`bl-done.sh` (задача не закрывается без правки доки capability),
+`bl-wake.py` (пробы колонки Backlog: кэш на старте + фоновое обновление),
+`bl-migrate.py` (openspec + отложка → Backlog.md). Роутер отправляет в
+`docflow` любой репо с `backlog/config.yml`. Пилот — GM+, две недели.
+
+---
+
 ## v5.0 — derflow_v2 (24.09.2026)
 
 Форк под Opus 5.5 и расход токенов. Роутер `SKILL.md` ужат с 26,9 до ~12 КБ:
