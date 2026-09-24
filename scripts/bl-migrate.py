@@ -14,9 +14,10 @@
   строка отложки state: waiting    → Backlog: Due = review_by, в описании
                                      «почему не сейчас» и блок пробы ```when
   строка отложки state: done       → пропуск
-  хендоффы всех ворктри            → To Do: заголовок = «имя:», заметки =
-    (.claude/handoff/*.md и          текст хендоффа, в описании ветка и
-     openspec/changes/*/HANDOFF.md)  ворктри — недопиленные сессии
+  хендоффы всех ворктри            → To Do «Недопилено», ТОЛЬКО если ветка
+    (.claude/handoff/*.md и          из его шапки жива (есть и не влита в
+     openspec/changes/*/HANDOFF.md)  --base); одна задача на ветку
+  заявка: все задачи отмечены или ветка её хендоффа влита → «Дозакрыть»
 
 Запускать из корня репозитория после `backlog init`. Каталог openspec/ и
 строки отложки не удаляются — это делаешь ты, когда сверишь результат.
@@ -25,6 +26,7 @@
 import argparse, json, pathlib, re, subprocess, sys
 
 LABEL = "migrated"
+BASE = "develop"
 
 
 def run(argv):
@@ -81,7 +83,8 @@ def plan_changes(root):
         if hand.exists():
             notes += "\n\n## Хендофф\n\n" + hand.read_text(encoding="utf-8", errors="replace")
         title = d.name
-        if change_is_complete(notes):
+        hb = handoff_branch(hand.read_text(encoding="utf-8", errors="replace")) if hand.exists() else ""
+        if change_is_complete(notes) or (hb and branch_state(hb, BASE) == "merged"):
             title = f"Дозакрыть: {d.name}"   # задачи сделаны, заявка не заархивирована
         yield ("todo", title, desc, notes, str(d.relative_to(root)))
 
@@ -122,45 +125,56 @@ def head_field(text, name):
     return m.group(1).strip() if m else ""
 
 
-def plan_handoffs(root):
-    """Хендоффы, которых нет в текущем дереве.
+def branch_state(branch, base, cache={}):
+    """live — ветка есть и не влита в base; иначе merged/gone."""
+    if branch not in cache:
+        if run(["git", "rev-parse", "--verify", "-q", f"refs/heads/{branch}"]).returncode:
+            cache[branch] = "gone"
+        elif run(["git", "merge-base", "--is-ancestor", branch, base]).returncode == 0:
+            cache[branch] = "merged"
+        else:
+            cache[branch] = "live"
+    return cache[branch]
 
-    `.claude/handoff/*.md` не в git — у каждого ворктри свои; дубли по
-    содержимому схлопываются. `openspec/changes/*/HANDOFF.md` в git: копия в
-    каждом ворктри одна и та же, поэтому берётся только заявка, которой нет в
-    текущем дереве (живёт лишь на своей ветке), и одна на id — самая свежая.
+
+def handoff_branch(text):
+    b = head_field(text, "ветка").split()
+    return b[0] if b else ""
+
+
+def plan_handoffs(root, base):
+    """Недопиленные сессии: хендофф, чья `ветка:` жива (есть и не влита в base).
+
+    Хендоффы бывают и в git, и вне его, и копия едет в каждый ворктри, так что
+    сам файл ничего не значит — значит только живая ветка в его шапке. Одна
+    задача на ветку: берётся копия из ворктри этой ветки, иначе самая свежая.
     """
-    import hashlib
-    here = {p.name for p in (root / "openspec" / "changes").glob("*")} \
-        | {p.name.split("-", 3)[-1] for p in (root / "openspec" / "changes" / "archive").glob("*")}
-    seen_text, by_change = set(), {}
-    out = []
-    for wt in worktrees():
-        for f in sorted((wt / ".claude" / "handoff").glob("*.md")):
+    wt_branch = {}
+    for line in run(["git", "worktree", "list", "--porcelain"]).stdout.split("\n\n"):
+        w = re.search(r"^worktree (.+)$", line, re.M)
+        b = re.search(r"^branch refs/heads/(.+)$", line, re.M)
+        if w:
+            wt_branch[pathlib.Path(w.group(1))] = b.group(1) if b else ""
+    best = {}
+    for wt, own in wt_branch.items():
+        files = list((wt / ".claude" / "handoff").glob("*.md")) \
+            + list((wt / "openspec" / "changes").glob("*/HANDOFF.md"))
+        for f in files:
             text = f.read_text(encoding="utf-8", errors="replace")
-            h = hashlib.sha1(text.encode()).hexdigest()
-            if h in seen_text:
+            br = handoff_branch(text)
+            if not br or branch_state(br, base) != "live":
                 continue
-            seen_text.add(h)
-            out.append((wt, f, text))
-        for f in (wt / "openspec" / "changes").glob("*/HANDOFF.md"):
-            cid = f.parent.name
-            if cid in here:
-                continue
-            m = f.stat().st_mtime
-            if cid not in by_change or m > by_change[cid][0]:
-                by_change[cid] = (m, wt, f)
-    for _, wt, f in by_change.values():
-        out.append((wt, f, f.read_text(encoding="utf-8", errors="replace")))
-    for wt, f, text in out:
-        branch = head_field(text, "ветка").split()[0:1]
-        branch = branch[0] if branch else "?"
-        name = head_field(text, "имя") or (f.parent.name if f.name == "HANDOFF.md" else f.stem)
+            rank = (own == br, f.stat().st_mtime)
+            if br not in best or rank > best[br][0]:
+                best[br] = (rank, wt, f, text)
+    for br, (_, wt, f, text) in sorted(best.items()):
+        name = head_field(text, "имя") or br
         desc = (f"Сессия остановлена до переезда на docflow.\n\n"
-                f"Ветка: `{branch}` · ворктри: `{wt}`\n"
+                f"Ветка: `{br}` (не влита в {base}) · ворктри: `{wt}`\n"
                 f"Хендофф: `{f}` (в заметках — полная копия).\n\n"
-                f"Продолжать: `bl-lock.sh take` в этом ворктри, дальше "
-                f"по заметкам.")
+                f"Продолжать: `bl-lock.sh take` в ворктри ветки, дальше по "
+                f"заметкам. Ветка мертва → `backlog task edit <id> -s Done` "
+                f"с заметкой почему.")
         yield ("handoff", f"Недопилено: {name}", desc, text, str(f))
 
 
@@ -170,7 +184,11 @@ def main():
     ap.add_argument("--waiting", action="append", default=[])
     ap.add_argument("--global-waiting", action="append", default=[])
     ap.add_argument("--entry", default="")
+    ap.add_argument("--base", default="develop",
+                    help="ветка, влитость в которую значит «сделано»")
     a = ap.parse_args()
+    global BASE
+    BASE = a.base
     root = pathlib.Path(run(["git", "rev-parse", "--show-toplevel"]).stdout.strip() or ".")
     if not (root / "backlog").exists():
         print("нет backlog/ — сначала backlog init", file=sys.stderr)
@@ -179,7 +197,7 @@ def main():
     items = list(plan_specs(root)) + list(plan_changes(root)) \
         + list(plan_waiting(a.waiting, "")) \
         + list(plan_waiting(a.global_waiting, a.entry or "\0")) \
-        + list(plan_handoffs(root))
+        + list(plan_handoffs(root, a.base))
     n = 0
     for it in items:
         kind, title = it[0], it[1]
