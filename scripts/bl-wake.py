@@ -59,7 +59,9 @@ def parse_block(text):
         return None
     f = {}
     for line in head.splitlines():
-        line = line.split("#", 1)[0].strip()
+        # комментарий — только через два пробела: `#` бывает в самом match
+        # (re.escape превращает его в `\#`), и срезать по нему нельзя
+        line = re.sub(r"\s{2,}#.*$", "", line).strip()
         if ":" in line:
             k, v = line.split(":", 1)
             f[k.strip()] = v.strip()
@@ -88,8 +90,11 @@ def probe(f, root):
     if p.returncode != 0:
         return "quiet", ""
     pat = f.get("match")
-    if pat and not re.search(pat, p.stdout):
-        return "quiet", ""
+    try:
+        if pat and not re.search(pat, p.stdout):
+            return "quiet", ""
+    except re.error as e:
+        return "unreachable", f"плохой match: {e}"
     hit = ""
     if pat:
         hit = next((l for l in p.stdout.splitlines() if re.search(pat, l)), "")
@@ -97,6 +102,13 @@ def probe(f, root):
 
 
 def check(t, root, today):
+    try:
+        return _check(t, root, today)
+    except Exception as e:  # одна кривая задача не роняет весь прогон
+        return f"⚪ проба не дошла {t.get('id')} · {type(e).__name__}: {e}"
+
+
+def _check(t, root, today):
     tid, title = t["id"], t["title"]
     full = backlog_json("task", "view", tid) or {}
     task = full.get("task", full)
