@@ -14,6 +14,9 @@
   строка отложки state: waiting    → Backlog: Due = review_by, в описании
                                      «почему не сейчас» и блок пробы ```when
   строка отложки state: done       → пропуск
+  хендоффы всех ворктри            → To Do: заголовок = «имя:», заметки =
+    (.claude/handoff/*.md и          текст хендоффа, в описании ветка и
+     openspec/changes/*/HANDOFF.md)  ворктри — недопиленные сессии
 
 Запускать из корня репозитория после `backlog init`. Каталог openspec/ и
 строки отложки не удаляются — это делаешь ты, когда сверишь результат.
@@ -97,6 +100,42 @@ def plan_waiting(dirs, entry):
                    fields.get("review_by"))
 
 
+def worktrees():
+    out, cur = [], None
+    for line in run(["git", "worktree", "list", "--porcelain"]).stdout.splitlines():
+        if line.startswith("worktree "):
+            cur = pathlib.Path(line[9:])
+            out.append(cur)
+    return out
+
+
+def head_field(text, name):
+    m = re.search(rf"^{name}:\s*(.+)$", text, re.M)
+    return m.group(1).strip() if m else ""
+
+
+def plan_handoffs():
+    seen = set()
+    for wt in worktrees():
+        files = list((wt / ".claude" / "handoff").glob("*.md")) \
+            + list((wt / "openspec" / "changes").glob("*/HANDOFF.md"))
+        for f in sorted(files):
+            if f.resolve() in seen:
+                continue
+            seen.add(f.resolve())
+            text = f.read_text(encoding="utf-8", errors="replace")
+            branch = head_field(text, "ветка").split()[0:1]
+            branch = branch[0] if branch else "?"
+            name = head_field(text, "имя") or f.stem
+            title = f"Недопилено: {name}"
+            desc = (f"Сессия остановлена до переезда на docflow.\n\n"
+                    f"Ветка: `{branch}` · ворктри: `{wt}`\n"
+                    f"Хендофф: `{f}` (в заметках — полная копия).\n\n"
+                    f"Продолжать: `bl-lock.sh take` в этом ворктри, дальше "
+                    f"по заметкам.")
+            yield ("handoff", title, desc, text, str(f))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true")
@@ -111,7 +150,8 @@ def main():
     have = existing_titles()
     items = list(plan_specs(root)) + list(plan_changes(root)) \
         + list(plan_waiting(a.waiting, "")) \
-        + list(plan_waiting(a.global_waiting, a.entry or "\0"))
+        + list(plan_waiting(a.global_waiting, a.entry or "\0")) \
+        + list(plan_handoffs())
     n = 0
     for it in items:
         kind, title = it[0], it[1]
@@ -129,6 +169,13 @@ def main():
             if not m:
                 print(f"  ❌ {p.stdout}{p.stderr}", file=sys.stderr); continue
             run(["backlog", "doc", "update", m.group(1), "--content", it[2]])
+        elif kind == "handoff":
+            _, _, desc, notes, ref = it
+            p = run(["backlog", "task", "create", title, "-s", "To Do",
+                     "-l", f"{LABEL},handoff", "-d", desc, "--notes", notes,
+                     "--ref", ref, "--plain"])
+            if p.returncode:
+                print(f"  ❌ {p.stderr}", file=sys.stderr)
         elif kind == "todo":
             _, _, desc, notes, ref = it
             argv = ["backlog", "task", "create", title, "-s", "To Do",
