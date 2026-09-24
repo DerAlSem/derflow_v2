@@ -184,6 +184,8 @@ def main():
     ap.add_argument("--waiting", action="append", default=[])
     ap.add_argument("--global-waiting", action="append", default=[])
     ap.add_argument("--entry", default="")
+    ap.add_argument("--changes-to", default="To Do", choices=["To Do", "Backlog"],
+                    help="куда класть живые заявки; Backlog = с меткой triage")
     ap.add_argument("--base", default="develop",
                     help="ветка, влитость в которую значит «сделано»")
     a = ap.parse_args()
@@ -224,8 +226,14 @@ def main():
                 print(f"  ❌ {p.stderr}", file=sys.stderr)
         elif kind == "todo":
             _, _, desc, notes, ref = it
-            argv = ["backlog", "task", "create", title, "-s", "To Do",
-                    "-l", LABEL, "-d", desc or title, "--ref", ref, "--plain"]
+            status, labels = "To Do", LABEL
+            if a.changes_to == "Backlog" and not title.startswith("Дозакрыть:"):
+                status, labels = "Backlog", f"{LABEL},triage"
+                desc = ("**Почему не сейчас:** не разобрано при переезде с openspec "
+                        f"({ref}). Разбор: живое → To Do, выкачено → Дозакрыть, "
+                        "мертво → Done с заметкой.\n\n" + (desc or title))
+            argv = ["backlog", "task", "create", title, "-s", status,
+                    "-l", labels, "-d", desc or title, "--ref", ref, "--plain"]
             if notes:
                 argv += ["--notes", notes]
             p = run(argv)
