@@ -26,10 +26,9 @@ which_profile() {
   case "$url" in *derflow_v2*) echo v2 ;; *) echo v1 ;; esac
 }
 
-running() {
-  pgrep -x claude >/dev/null 2>&1 && return 0
-  pgrep -f '/bin/claude( |$)' >/dev/null 2>&1 && return 0
-  return 1
+running() {  # мост Claude in Chrome (--chrome-native-host) — не сессия
+  ps -axo args= | grep -E '(^|/)claude( |$)' \
+    | grep -v -e '--chrome-native' -e 'grep' | grep -q .
 }
 
 cmd="${1:-status}"
