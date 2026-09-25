@@ -117,7 +117,7 @@ description: Use when starting any development task or request in a code reposit
 
 | Интент | Полоса | Маршрут |
 |---|---|---|
-| новый проект | **C-bootstrap** | брейншторм → базовый `openspec/specs` (`_lane-c.md`) |
+| новый проект | **C-bootstrap** | `docflow/setup.md`, «С нуля» → брейншторм → дальше `docflow`; openspec не заводится |
 | нет спеки, надо менять сшивку X | **C-adopt** | дельта только на то, что меняешь |
 | заявок накопилось | **C-drain** | `/opsx:bulk-archive`, триаж до фанаута |
 | «файл не слишком большой?» | **D** | `system-architect` или `simplify` → вердикт |
