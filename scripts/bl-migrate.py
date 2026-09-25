@@ -41,7 +41,23 @@ def existing_titles():
         titles |= {t["title"] for t in json.loads(p.stdout).get("tasks", [])}
     p = run(["backlog", "doc", "list", "--plain"])
     titles |= set(p.stdout.split("\n")) if p.returncode == 0 else set()
-    return titles
+    # Перенесённое до 25.09.2026 звалось «Недопилено: G·x»; без этой строки
+    # повторный прогон не узнал бы его и завёл двойника «Недопилено: x».
+    return titles | {strip_letter_title(t) for t in titles}
+
+
+def strip_project_letter(name):
+    """«G·галка» → «галка». Буква — ПРОЕКТ в имени таба (карта в
+    derflow/_capture.md), а на доске одного проекта она шум: боевое 24.09.2026 —
+    сессия прочла «G·» в заголовках как приоритет. Буква остаётся в строке
+    «имя:» заметок, откуда её берёт hand.sh."""
+    return re.sub(r"^[^\W\d_]·", "", name)
+
+
+def strip_letter_title(title):
+    head = "Недопилено: "
+    return head + strip_project_letter(title[len(head):]) \
+        if title.startswith(head) else title
 
 
 def frontmatter(text):
@@ -246,7 +262,7 @@ def plan_handoffs(root, base):
                 f"Продолжать: `bl-lock.sh take` в ворктри ветки, дальше по "
                 f"заметкам. Ветка мертва → `backlog task edit <id> -s Done` "
                 f"с заметкой почему.")
-        yield ("handoff", f"Недопилено: {name}", desc, text, str(f))
+        yield ("handoff", f"Недопилено: {strip_project_letter(name)}", desc, text, str(f))
 
 
 def main():
@@ -278,7 +294,7 @@ def main():
         + list(plan_waiting(a.waiting, "")) \
         + list(plan_waiting(a.global_waiting, a.entry or "\0")) \
         + list(plan_handoffs(root, a.base))
-    n = 0
+    n, planned = 0, []
     for it in items:
         kind, title = it[0], it[1]
         if title in have or any(title in h for h in have if kind == "doc"):
@@ -286,6 +302,7 @@ def main():
             continue
         print(f"+ {kind}: {title}")
         n += 1
+        planned.append(it)
         if not a.apply:
             continue
         if kind == "doc":
@@ -328,8 +345,10 @@ def main():
             if p.returncode:
                 print(f"  ❌ {p.stderr}", file=sys.stderr)
     from collections import Counter
+    # Счёт по тому же решению, что и перенос: прежний фильтр «not in have» не
+    # видел пропуска доки по подстроке и показывал «doc 124» при пропуске.
     c = Counter(("todo-дозакрыть" if it[0] == "todo" and it[1].startswith("Дозакрыть:") else it[0])
-                for it in items if it[1] not in have)
+                for it in planned)
     print("\nпо видам: " + ", ".join(f"{k} {v}" for k, v in sorted(c.items())))
     print(f"{'перенесено' if a.apply else 'к переносу'}: {n}"
           + ("" if a.apply else "  (запусти с --apply)"))
