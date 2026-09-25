@@ -3,6 +3,8 @@
     "allow": [
       "Bash(/Users/deralsem/.claude/scripts/hand.sh:*)",
       "Bash(~/.claude/scripts/hand.sh:*)",
+      "Bash(node /Users/deralsem/.claude/scripts/shot.mjs:*)",
+      "Bash(node ~/.claude/scripts/shot.mjs:*)",
       "Bash(ssh dell:*)",
       "Bash(ssh dell-lan:*)",
       "Bash(ssh dell-win:*)"
