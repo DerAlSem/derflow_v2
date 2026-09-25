@@ -6,8 +6,8 @@
 backlog/config.yml. Замер 25.09.2026: gmb_v2 отстал от origin/develop на 1514.
 
 Зовётся хуком SessionStart. Молчит, если: не git, ворктри (не основной чекаут),
-HEAD на ветке, отставания нет. Иначе — чистое (tracked) дерево сдвигает вперёд,
-грязное или отказ checkout — одна строка 🔴.
+HEAD на ветке, отставания нет. Иначе — checkout --detach вперёд (без -f: правки
+он переносит или отказывает, не губит); свои коммиты на корне или отказ — 🔴.
 
 База — ref, к которому корень отцепили в последний раз (рефлог «checkout: moving
 from X to origin/Y»), иначе origin/HEAD. fetch НЕ зовётся (таймаут хука): сравнение
@@ -65,12 +65,8 @@ def main():
         print(red + f"Сдвиг не делаю: на корне {ahead} своих коммитов вне {base}. "
               "Ответы по коду из корня — по старому коду.")
         return
-    _, dirty, _ = git("status", "--porcelain", "--untracked-files=no", cwd=top)
-    if dirty:
-        n = len(dirty.splitlines())
-        print(red + f"Сдвиг не делаю: {n} изменённых отслеживаемых файлов. "
-              f"Сдвиг вручную: git checkout --detach {base}")
-        return
+    # грязное дерево не мешает само: checkout без -f правок не губит — переносит
+    # их или отказывает (замер gmb_v2: 10 застейдженных миграций = develop)
     # checkout 1500 коммитов может не влезть в таймаут хука; отдельная сессия
     # процесса переживёт убийство хука и не оставит index.lock посреди работы
     p = subprocess.Popen(["git", "checkout", "-q", "--detach", base], cwd=top,
@@ -87,7 +83,9 @@ def main():
         why = f"мешают неотслеживаемые: {', '.join(files[:4])}" if files else err[:160]
         print(red + f"checkout отказал — {why}.")
         return
-    print(f"↻ корень {name}: сдвинут {head} → {base} (+{behind}, база — {age}).")
+    _, dirty, _ = git("status", "--porcelain", "--untracked-files=no", cwd=top)
+    kept = f"; перенесено локальных правок: {len(dirty.splitlines())}" if dirty else ""
+    print(f"↻ корень {name}: сдвинут {head} → {base} (+{behind}, база — {age}{kept}).")
 
 if __name__ == "__main__":
     try:
