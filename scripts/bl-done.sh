@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Закрыть задачу Backlog.md. Главное правило docs-first держится здесь:
 # задача не закрывается, пока «как устроено» не обновлено в backlog/docs.
+# И пока не отмечены все AC и DoD и не записан --final-summary.
 #
 #   bl-done.sh <ID>                       закрыть (нужна правка backlog/docs)
 #   bl-done.sh <ID> --no-doc "<причина>"  закрыть без правки доки, с причиной
@@ -24,6 +25,28 @@ doc_touched() {
   git log -n 50 --format=%ct -- backlog/docs \
     | awk -v s="$since" '$1 > s { f = 1 } END { exit !f }'
 }
+
+# Готовность самой задачи: все AC и DoD отмечены, итог записан.
+# Лишний критерий не обходится флагом — его снимают --remove-ac с причиной
+# в заметках, чтобы «не сделано» не закрывалось молча.
+task_json="$(backlog task view "$id" --json)"
+unready="$(printf '%s' "$task_json" | python3 -c '
+import json, sys
+t = json.load(sys.stdin)["task"]
+for kind, flag in (("acceptanceCriteria", "AC"), ("definitionOfDone", "DoD")):
+    for c in t.get(kind) or []:
+        if not c["checked"]:
+            print("   %s #%s не отмечен: %s" % (flag, c["index"], c["text"]))
+if not (t.get("finalSummary") or "").strip():
+    print("   пустой --final-summary (Ждёт тебя · Сделано · Найдено)")
+')"
+if [ -n "$unready" ]; then
+  echo "❌ $id: задача не готова к закрытию." >&2
+  echo "$unready" >&2
+  echo "   Выполненное — --check-ac/--check-dod <n>; лишний критерий —" >&2
+  echo "   --remove-ac <n> и причина в --append-notes." >&2
+  exit 2
+fi
 
 if [ "${2:-}" = "--no-doc" ]; then
   why="${3:?--no-doc требует причину}"
