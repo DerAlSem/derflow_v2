@@ -155,7 +155,16 @@ hand="$(cd "$(dirname "$hand")" && pwd)/$(basename "$hand")"
 # пробел ломает диапазон, и шаблон совпадает с ЛЮБЫМ именем — «tab-name.md» в
 # том числе (замер 07.09.2026, первый же прогон). Байтовая проверка `LC_ALL=C`
 # однозначна и от локали не зависит.
-if printf '%s' "$(basename "$hand")" | LC_ALL=C grep -q '[^ -~]'; then
+#
+# `backlog/` исключён: в docflow хендофф — файл задачи, имя ему даёт Backlog.md
+# из заголовка, сессия его не выбирает. Совет «зови латиницей» там невыполним и
+# бил по каждой передаче; реальную дырку и так держит `core.quotePath=false`.
+case "$hand" in
+  "$dir"/backlog/*) latin_check=0 ;;
+  *)                latin_check=1 ;;
+esac
+if [ "$latin_check" = 1 ] \
+   && printf '%s' "$(basename "$hand")" | LC_ALL=C grep -q '[^ -~]'; then
   echo "⚠️  имя файла хендоффа не в латинице: $(basename "$hand")" >&2
   echo "    ключ живёт в строке «ветка:», имя файла свободно —" >&2
   echo "    зови латинским слагом задачи: inbox-push-trace.md" >&2
