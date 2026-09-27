@@ -151,7 +151,7 @@ def plan_waiting(dirs, entry):
                 continue
             if entry and entry not in fields.get("entry", ""):
                 continue
-            parts = [f"**Почему не сейчас / когда:** {fields.get('ripe_when', '—')}"]
+            parts = [f"**Созреет, когда:** {fields.get('ripe_when', '—')}"]
             blk = when_block(fields)
             if blk:
                 parts.append(blk)
