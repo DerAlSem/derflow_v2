@@ -123,3 +123,13 @@ brainstorming → /opsx:explore → /opsx:propose
 - Гнать не тот «explore» или оба сразу: Lane C explore — дизайн по живой спеке, Orient `explore-code` — разведка НЕзнакомого репо.
 - Анонсировать openspec и сдрейфовать в `docs/superpowers/specs` + `writing-plans`:
   переутверждай полосу на переходе explore→propose, а не только в анонсе.
+- Гнать заявку в `openspec/changes` в репо с `backlog/config.yml` — там заявка
+  живёт в Backlog.md (скилл `docflow`), openspec закрыт с 24.09. Роутер правило
+  знает, движок полосы — нет: сверяй маркер ДО открытия `openspec/`. Боевое
+  01.10.2026: Lane C оформила выкат в openspec-заявку через неделю после
+  запрета (gmb_v2 bb56a504b).
+- Гнать заявку в `openspec/changes` в репо с `backlog/config.yml` — там заявка
+  живёт в Backlog.md (скилл `docflow`), openspec закрыт с 24.09. Роутер правило
+  знает, движок полосы — нет: сверяй маркер ДО открытия `openspec/`. Боевое
+  01.10.2026: Lane C оформила выкат в openspec-заявку через неделю после
+  запрета (gmb_v2 bb56a504b).
