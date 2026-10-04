@@ -328,6 +328,13 @@ q_sess="$(sq "$sess")"
 # `openspec`) — им абсолютного пути никто не подставит.
 q_path="$(sq "$PATH")"
 q_claude="$(sq "$(command -v claude 2>/dev/null || echo claude)")"
+# Родитель на GLM (glm.sh) — ребёнок тоже. Окружение в таб не доезжает (см.
+# транспорт ниже), поэтому хост передаётся выбором лончера, а не переменной;
+# ключ z.ai в файл лончера не пишется — его достаёт сам glm.sh.
+q_run="$q_claude"
+if [ "${DERFLOW_HOST:-}" = glm ]; then
+  q_run="$(sq "$HOME/.claude/scripts/glm.sh")"
+fi
 
 # Транспорт — ТАБ в РАБОТАЮЩЕМ инстансе, а не новый инстанс.
 #
@@ -381,7 +388,7 @@ if ! command -v $q_claude >/dev/null 2>&1; then
   echo "PATH=\$PATH"
   exec zsh -i          # держим таб открытым, иначе ошибка мигнёт и исчезнет
 fi
-exec $q_claude --name $q_sess $q_prompt
+exec $q_run --name $q_sess $q_prompt
 LAUNCHER
 chmod +x "$launcher"
 
