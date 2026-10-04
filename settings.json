@@ -50,11 +50,26 @@
             "type": "command",
             "command": "$HOME/.claude/hooks/canon-drift.py",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/glm-blind.py",
+            "timeout": 5
           }
         ]
       }
     ],
     "PreToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/glm-blind.py",
+            "timeout": 5
+          }
+        ]
+      },
       {
         "matcher": "Skill|Bash|Task|Agent",
         "hooks": [
