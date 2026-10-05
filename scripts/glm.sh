@@ -44,6 +44,10 @@ export ANTHROPIC_MODEL="glm-5.3"
 export ANTHROPIC_DEFAULT_OPUS_MODEL="glm-5.3"
 export ANTHROPIC_DEFAULT_SONNET_MODEL="glm-5.3"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-5.3-flash"
+# Окно glm-5.3 — 1M (со слов владельца 05.10.2026; список моделей z.ai размеров
+# не отдаёт). Без этой строки Claude Code не знает модель, держит 200k и
+# предупреждает на каждом старте. Порог расщепления derflow от окна не зависит.
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000
 # Метка хоста: по ней hand.sh открывает расщеплённую сессию тоже на GLM, а
 # consult.sh знает, что окружение надо вычистить.
 export DERFLOW_HOST="glm"
