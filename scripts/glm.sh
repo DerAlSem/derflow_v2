@@ -48,6 +48,14 @@ export ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-5.3-flash"
 # не отдаёт). Без этой строки Claude Code не знает модель, держит 200k и
 # предупреждает на каждом старте. Порог расщепления derflow от окна не зависит.
 export CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000
+# Auto mode: серверные классифайер-проверки через api.z.ai не доезжают (шлюз
+# режет поля), и диалог «session isn't eligible» держит первое проверяемое
+# действие. =0 — классифайер всегда клиентский, диалога нет. Убирает ПАУЗУ,
+# ловушку из шапки «решает GLM» — нет. Переменная временная (may be removed):
+# исчезнет — просто вернётся диалог, один Enter в сутки.
+# Дока: code.claude.com/docs/en/auto-mode-classifier-billing. Только здесь, не
+# в settings env: иначе погасит серверные проверки обычным сеансам Anthropic.
+export CLAUDE_CODE_AUTO_MODE_SERVER=0
 # Метка хоста: по ней hand.sh открывает расщеплённую сессию тоже на GLM, а
 # consult.sh знает, что окружение надо вычистить.
 export DERFLOW_HOST="glm"
