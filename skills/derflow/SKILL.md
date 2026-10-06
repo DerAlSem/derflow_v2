@@ -76,6 +76,10 @@ description: Use when starting any development task or request in a code reposit
 
 ## Граница B/C
 
+В репо с `backlog/config.yml` (docflow) таблица ниже решает только *нужна ли
+заявка*; какая именно и где лежат доки — решает `docflow`: change → задача
+Backlog.md, спека → его доки; `design.md` и `.openspec.yaml` там не существуют.
+
 | Ситуация | Действие |
 |---|---|
 | Баг в коде, спека описывает поведение верно | правь код, change не открывать |
