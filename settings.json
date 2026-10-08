@@ -107,7 +107,8 @@
   },
   "enabledPlugins": {
     "superpowers@claude-plugins-official": true,
-    "self-learning@self-learning-skills": true
+    "self-learning@self-learning-skills": true,
+    "cc-plugin-you-should-know@builtin": false
   },
   "extraKnownMarketplaces": {
     "self-learning-skills": {
@@ -117,8 +118,10 @@
       }
     }
   },
+  "tui": "fullscreen",
   "skipWorkflowUsageWarning": true,
   "theme": "dark",
+  "switchModelsOnFlag": false,
   "autoMode": {
     "environment": [
       "### Org-wide",
@@ -145,7 +148,11 @@
       "**Trusted repo**: /Users/deralsem/.claude and its remote github.com:DerAlSem/derflow_v2 (PUBLIC) — nothing confidential goes into it: no secrets, hostnames, IPs, client data or business figures",
       "**Org-specific CLIs**: None configured",
       "**Routine under this repo's prefix**: edits to agents, skills, commands and CLAUDE.md files inside /Users/deralsem/.claude are routine; the repo is itself the Claude config directory, so treat changes to its own settings and skills as self-modification-adjacent and confirm before rewriting auto-mode or permission files"
+    ],
+    "allow": [
+      "$defaults",
+      "Owner-Declared Prod Promotion: in a repo whose root CLAUDE.md states that the assistant performs production promotion, the documented sequence is authorized once the user has explicitly asked in this session to roll to prod (e.g. \"кати на прод\", \"выкатывай\", or an answer naming the rollout) and has not retracted it; a request made earlier in the session still stands even if other agents' messages came in between. Covers: git push of a branch to the default branch (incl. `HEAD:main`), pushing a `prod-*` rollback tag, `./deploy.sh --env=prod`, and SendMessage notices about that rollout. The target is that repo's own prod environment as declared in its CLAUDE.md. Not covered: other repos, force-push, migrations outside deploy.sh, anything not in the documented sequence.",
+      "Disposable Demo Data: the owner's demo environment (database and app) is rebuilt from seed data and holds no real data, so any writes there — inserts, updates, deletes, resets, reseeding, via ssh or a SQL client — are authorized when they serve the user's task. Applies only to the demo environment of the repo the session works in, identified by `demo` in the database or environment name; never to a database or host whose name carries `prod`."
     ]
-  },
-  "tui": "fullscreen"
+  }
 }
