@@ -30,15 +30,20 @@ unset CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID CLAUDE_CODE_ENTRYPOINT
 out="$(mktemp)"
 trap 'rm -f "$out"' EXIT
 
+dir="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null || echo "$dir")"
+# SHA — ДО вызова: квитанция привязана к тому, что Opus видел, а не к тому, что
+# параллельная сессия закоммитила, пока он думал.
+head="$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)"
 cd "$dir"
 claude -p --model "$model" --max-turns "$turns" --output-format json \
   --allowedTools "Read Grep Glob Bash(git log:*) Bash(git show:*) Bash(git diff:*)" \
   --disallowedTools "Edit Write NotebookEdit Agent" \
   < "$brief" > "$out" 2>/dev/null || true
 
-python3 - "$out" "$model" "$dir" "$brief" <<'PY'
+python3 - "$out" "$model" "$dir" "$brief" "$head" <<'PY'
 import json, os, sys, datetime
-out, model, d, brief = sys.argv[1:5]
+out, model, d, brief, head = sys.argv[1:6]
+head = head or None
 raw = open(out, errors="replace").read()
 try:
     r = json.loads(raw[raw.index("{"):])
@@ -46,6 +51,12 @@ except ValueError:
     print("❌ consult: ответ не разобран\n" + raw[-1500:])
     sys.exit(1)
 print(r.get("result") or "❌ пустой ответ")
+# Квитанция для hooks/consult-receipt.py: вердикт — ПОСЛЕДНЯЯ непустая строка
+# ответа вида «ВЕРДИКТ: ПУСКАТЬ|СТОП» (цитата из пакета в середине не считается).
+import re
+lines = [l for l in (r.get("result") or "").splitlines() if l.strip()]
+vm = re.fullmatch(r"\W*ВЕРДИКТ:\s*(ПУСКАТЬ|СТОП)\W*", lines[-1]) if lines else None
+verdict = {"ПУСКАТЬ": "go", "СТОП": "stop"}.get(vm.group(1)) if vm else None
 u = r.get("usage") or {}
 mods = list((r.get("modelUsage") or {}).keys())
 line = {
@@ -55,6 +66,7 @@ line = {
     "in": u.get("input_tokens", 0), "cache_read": u.get("cache_read_input_tokens", 0),
     "cache_write": u.get("cache_creation_input_tokens", 0),
     "out": u.get("output_tokens", 0), "error": r.get("is_error"),
+    "head": head, "verdict": verdict,
 }
 log = os.path.expanduser("~/.claude/tmp/consult.jsonl")
 os.makedirs(os.path.dirname(log), exist_ok=True)

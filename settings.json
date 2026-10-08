@@ -71,7 +71,17 @@
         ]
       },
       {
-        "matcher": "Skill|Bash|Task|Agent",
+        "matcher": "Bash|Write|Edit|NotebookEdit",
+    "hooks": [
+     {
+      "type": "command",
+      "command": "$HOME/.claude/hooks/consult-receipt.py",
+      "timeout": 5
+     }
+    ]
+   },
+   {
+    "matcher": "Skill|Bash|Task|Agent",
         "hooks": [
           {
             "type": "command",
