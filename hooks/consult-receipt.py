@@ -7,13 +7,17 @@
 Причина: классификатор авто-режима в GLM-сессии тоже GLM, и страховки у прода
 там нет, кроме гейта из CLAUDE.md проекта, который GLM «выполняет по памяти».
 
-PreToolUse Bash: команда трогает прод — любой `deploy.sh` (кроме
-`--env=demo`, `--dry-run`, `-h`; у части репо флага нет вообще и без него
-выкатывается прод), push в main/master, push тега `prod-*`, `--tags`/`--all`/
+PreToolUse Bash: команда трогает прод — ИСПОЛНЕНИЕ `deploy.sh` (первое слово
+команды, позиция после `;`/`&`/`|`/перевода строки или аргумент интерпретатора
+bash/sh/sudo/env; `bash -n` — разбор синтаксиса, не запуск; кроме `--env=demo`,
+`--dry-run`, `-h`; у части репо флага нет вообще и без него выкатывается прод),
+push в main/master, push тега `prod-*`, `--tags`/`--all`/
 `--mirror`, голый push из ветки main — пропускается только при квитанции:
 в ~/.claude/tmp/consult.jsonl есть запись, у которой
   • model == opus и среди served есть модель с «opus» в имени,
-  • repo — тот же репозиторий, что у команды,
+  • repo — тот же репозиторий, что у команды (для deploy: cwd/`cd`, а при
+    абсолютном пути скрипта — каталог скрипта: выкат чужого репо из-под
+    ~/.claude тоже гейтится),
   • head равен SHA, который уезжает: для push — HEAD, для deploy — origin/main
     (deploy.sh выкатывает origin/main, а не локальное дерево),
   • verdict == go (последняя строка ответа Opus — «ВЕРДИКТ: ПУСКАТЬ»),
@@ -26,7 +30,11 @@ consult.sh — deny: иначе «починить» отказ проще вс�
 Не закрывает: (1) обёртки (`bash -c`, make), где прод-команда не видна в строке;
 (2) смысловой пробел — квитанция привязана к SHA, а не к содержанию пакета:
 консультация по пустяковому пакету на том же HEAD тоже даст «ПУСКАТЬ». Это
-упор против забывчивости, а не против умысла.
+упор против забывчивости, а не против умысла; (3) subshell «( deploy.sh» с
+пробелом и запуск под бктиком — от прозаического упоминания неотличимы.
+Упоминание deploy.sh в аргументах чтения (grep/sed/cat) и в прозе
+коммит-сообщения исполнением НЕ считается — ровно это и сужено 09.10.2026
+после ложных отказов на чтении файла и коммит-сообщении.
 ~/.claude (канон «пушить сразу») пропускается.
 """
 import datetime, json, os, re, shlex, subprocess, sys
@@ -78,7 +86,8 @@ if "consult.jsonl" in cmd and "consult.sh" not in cmd:
 # --- что считается прод-промоушеном ------------------------------------------
 GIT = r"git(?:\s+(?:-[cC]\s+\S+|--[\w-]+(?:=\S+)?))*"
 PUSH = re.compile(r"(?:^|[;&|(\n])\s*(" + GIT + r")\s+push\b([^;&|\n]*)")
-DEPLOY = re.compile(r"(?<![\w-])deploy\.sh\b([^;&|\n]*)")
+DEPLOY_TOKEN = re.compile(r"(?<![\w./~-])(?:[~\w.$\"'/-]+/)?deploy\.sh\b")
+INTERPRETER = re.compile(r"(?:sudo|nohup|env|command|exec|(?:ba|z|da|k)?sh)\b")
 MAIN_REF = re.compile(r"(?:^|[\s:+])(?:refs/heads/)?(?:main|master)\b")
 PROD_TAG = re.compile(r"(?:^|[\s:+])(?:refs/tags/)?prod-[\w.\-]+")
 BULK = re.compile(r"(?:^|\s)--(?:tags|follow-tags|all|mirror)\b")
@@ -116,11 +125,39 @@ def git(d, *a):
         return ""
 
 
+def deploy_exec():
+    """[(токен deploy.sh, хвост до разделителя)] для каждого ИСПОЛНЕНИЯ скрипта.
+
+    Исполнение: deploy.sh — первое слово команды, позиция после разделителя
+    (`;`/`&`/`|`/перевод строки/«$(») или аргумент интерпретатора
+    (bash/sh/sudo/env/…; флаг `-n` — разбор синтаксиса, не запуск).
+    Упоминание — аргумент grep/sed/git add, проза коммит-сообщения —
+    исполнением не считается."""
+    hits = []
+    for m in DEPLOY_TOKEN.finditer(cmd):
+        line = cmd[:m.start()].rstrip(" \t").split("\n")[-1].rstrip(" \t")
+        if not line or line[-1] in ';&|`' or line.endswith("$("):
+            hits.append((m.group(0), re.split(r"[;&|\n]", cmd[m.end():])[0]))
+            continue
+        toks = line.split()
+        j = len(toks)
+        while j > 0 and re.fullmatch(r"-[A-Za-z]+", toks[j - 1]):
+            j -= 1
+        if j > 0 and INTERPRETER.fullmatch(toks[j - 1]) and "-n" not in toks[j:]:
+            hits.append((m.group(0), re.split(r"[;&|\n]", cmd[m.end():])[0]))
+    return hits
+
+
 def touches_prod():
     """(что, каталог, режим) или None. Режим: 'push' — сверять HEAD, 'deploy' — origin/main."""
-    m = DEPLOY.search(cmd)
-    if m and not DEMO_ARGS.search(m.group(1)):
-        return "deploy.sh (прод)", repo_dir(), "deploy"
+    for tok_, tail in deploy_exec():
+        if not DEMO_ARGS.search(tail):
+            d = repo_dir()
+            if tok_.startswith("/") or tok_.startswith("~"):
+                p = resolve(tok_)
+                if os.path.isfile(p):
+                    d = os.path.dirname(p)  # абсолютный путь: репо скрипта, не cwd
+            return "deploy.sh (прод)", d, "deploy"
     for m in PUSH.finditer(cmd):
         prefix, args = m.group(1), m.group(2)
         if re.search(r"(?:^|\s)(?:-n|--dry-run)\b", args):
