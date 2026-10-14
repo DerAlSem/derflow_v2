@@ -109,7 +109,8 @@ def run():
         # и `git -C <корень> …` из ворктри или из-вне репо — тоже корень
         dirs = re.findall(r"(?:^|[;&|(]\s*)cd\s+[\"']?([^\s;&|\"')]+)", cmd) + \
             re.findall(r"\bgit\s+-C\s+[\"']?([^\s;&|\"')]+)", cmd)
-        root = main if at_root else None
+        # команда, начатая с `cd X`, исполняется в X, а не в cwd сессии
+        root = main if at_root and not re.match(r"\s*cd\s", cmd) else None
         for d in dirs:
             d = os.path.expanduser(d)
             d = d if os.path.isabs(d) else os.path.join(cwd, d)
