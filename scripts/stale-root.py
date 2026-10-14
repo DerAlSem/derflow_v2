@@ -19,6 +19,47 @@ def git(*a, cwd):
     r = subprocess.run(["git", *a], cwd=cwd, capture_output=True, text=True)
     return r.returncode, r.stdout.strip(), r.stderr.strip()
 
+LOCK_STALE_H = 24
+
+
+def root_dirt(root, common):
+    """Грязь основного чекаута — то, что уборка GM-432 нашла руками (14.10.2026):
+    корень на ветке с непушенными коммитами и отставанием, правки, задачи Backlog
+    неотслеживаемыми файлами, замки по 200–465 ч. Видна с ЛЮБОГО старта, в том
+    числе из ворктри: туда сессии и открываются."""
+    out = []
+    if git("symbolic-ref", "-q", "HEAD", cwd=root)[0] == 0:
+        b = git("rev-parse", "--abbrev-ref", "HEAD", cwd=root)[1]
+        rc, lr, _ = git("rev-list", "--left-right", "--count", "@{u}...HEAD", cwd=root)
+        behind, ahead = (lr.split() + ["0", "0"])[:2] if rc == 0 else ("?", "?")
+        if ahead != "0" or behind != "0":
+            out.append(f"на ветке {b}: непушенных {ahead}, отстаёт на {behind}")
+    _, mod, _ = git("status", "--porcelain", "--untracked-files=no", cwd=root)
+    if mod:
+        out.append(f"правок {len(mod.splitlines())}")
+    _, tasks, _ = git("ls-files", "--others", "--exclude-standard", "backlog", cwd=root)
+    if tasks:
+        ids = [re.match(r"[\w.-]+", os.path.basename(t)).group(0).upper()
+               for t in tasks.splitlines()]
+        out.append(f"неотслеживаемые файлы Backlog: {', '.join(ids[:6])}"
+                   + (f" и ещё {len(ids) - 6}" if len(ids) > 6 else ""))
+    locks = os.path.join(common, "bl-locks")
+    stale = []
+    for d in sorted(os.listdir(locks)) if os.path.isdir(locks) else []:
+        try:
+            own = open(os.path.join(locks, d, "owner")).read()
+            since = int(re.search(r"^since: (\d+)", own, re.M).group(1))
+            who = re.search(r"^who: (.*)", own, re.M).group(1)
+        except Exception:
+            continue
+        h = (time.time() - since) / 3600
+        if h >= LOCK_STALE_H:
+            stale.append(f"{d} ({who}, {h:.0f} ч)")
+    if stale:
+        out.append(f"замки старше {LOCK_STALE_H} ч: {', '.join(stale[:5])}")
+    return out
+
+
 def main():
     cwd = os.getcwd()
     try:
@@ -30,7 +71,15 @@ def main():
         return
     _, gd, _ = git("rev-parse", "--absolute-git-dir", cwd=top)
     _, cd, _ = git("rev-parse", "--git-common-dir", cwd=top)
-    if os.path.realpath(gd) != os.path.realpath(os.path.join(top, cd)):
+    common = os.path.realpath(os.path.join(top, cd))
+    if os.path.basename(common) == ".git":
+        root = os.path.dirname(common)
+        dirt = root_dirt(root, common)
+        if dirt:
+            print(f"🔴 основной чекаут {os.path.basename(root)} грязный — "
+                  + "; ".join(dirt) + ". Корень только для чтения: разобрать "
+                  "или сказать владельцу; свою работу — в ворктри.")
+    if os.path.realpath(gd) != common:
         return  # ворктри: его HEAD — чужая работа
     if git("symbolic-ref", "-q", "HEAD", cwd=top)[0] == 0:
         return  # на ветке: отставание ветки — не наша забота
