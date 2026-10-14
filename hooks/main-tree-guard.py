@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Сторож главного дерева: в основном чекауте параллельного репо не пишут.
 
-Репозиторий, который работается параллельно, объявляет это каталогом
-`.claude/worktrees/` в основном чекауте. В таком репо основной чекаут — только
-для чтения: правки, задачи Backlog, замки и коммиты делаются из ворктри, в ствол
+Репозиторий объявляет это отслеживаемым файлом `.claude/readonly-root` (каталог
+`.claude/worktrees/` есть у десятка репо — признаком он не годится). В таком репо
+основной чекаут — только для чтения: правки, задачи Backlog, замки и коммиты делаются из ворктри, в ствол
 — через `./scripts/land.sh`.
 
 Почему сторож, а не строка в правилах (GM-433, 14.10.2026): уборка GM-432 нашла
@@ -49,8 +49,8 @@ def main_checkout(cwd):
     if os.path.basename(common) != ".git":
         return None, False  # голый репо или нестандартная раскладка — не наше
     main = os.path.realpath(os.path.dirname(common))
-    if not os.path.isdir(os.path.join(main, ".claude", "worktrees")):
-        return None, False  # репо не объявил параллельную работу
+    if not os.path.isfile(os.path.join(main, ".claude", "readonly-root")):
+        return None, False  # репо не объявил корень только для чтения
     return main, os.path.realpath(top) == main
 
 
