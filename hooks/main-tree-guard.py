@@ -125,6 +125,8 @@ def run():
             if re.search(pat, flat):
                 if what == "git переключает дерево" and re.search(r"--detach\s+origin/", flat):
                     continue  # корень держат отцепленным на origin — это его норма
+                if re.fullmatch(r"\s*git\s+push\s+\S+\s+--delete\s+[\w./-]+\s*", flat):
+                    continue  # снос слитой удалённой ветки при жатве корень не пишет
                 deny(root, what)
 
 
