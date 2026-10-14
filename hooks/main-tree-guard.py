@@ -79,16 +79,20 @@ def run():
     tool = data.get("tool_name") or data.get("toolName") or ""
     inp = data.get("tool_input") or data.get("toolInput") or {}
     cwd = data.get("cwd") or os.getcwd()
-    main, at_root = main_checkout(cwd)
-    if not main:
-        return
+    main, at_root = main_checkout(cwd) if os.path.isdir(cwd) else (None, False)
 
     if tool in WRITE_TOOLS:
         paths = [inp.get(k) for k in ("file_path", "filePath", "notebook_path", "path")]
         paths += patch_paths(inp.get("patch") or inp.get("input") or "")
-        wt = os.path.join(main, ".claude", "worktrees")
         for p in filter(None, paths):
-            full = p if os.path.isabs(p) else os.path.join(cwd, p)
+            full = os.path.expanduser(p if os.path.isabs(p) else os.path.join(cwd, p))
+            d = os.path.dirname(full)
+            while d and not os.path.isdir(d):
+                d = os.path.dirname(d)  # файл новый — корень ищем от ближайшего каталога
+            main, _ = main_checkout(d) if d else (None, False)
+            if not main:
+                continue
+            wt = os.path.join(main, ".claude", "worktrees")
             if not inside(full, main) or inside(full, wt):
                 continue
             # игнорируемое git'ом (.env, локальные пробы) — не состояние репо
@@ -97,15 +101,30 @@ def run():
             deny(main, f"{tool} {os.path.relpath(os.path.realpath(full), main)}")
         return
 
-    if tool == "Bash" and at_root:
+    if tool == "Bash":
         cmd = inp.get("command") or ""
         if ".claude/worktrees/" in cmd:
             return  # команда сама уходит в ворктри (cd/-C) — граница соблюдена
+        # cwd хука — где стоит сессия, а не куда уходит команда: `cd <корень> && …`
+        # и `git -C <корень> …` из ворктри или из-вне репо — тоже корень
+        dirs = re.findall(r"(?:^|[;&|(]\s*)cd\s+[\"']?([^\s;&|\"')]+)", cmd) + \
+            re.findall(r"\bgit\s+-C\s+[\"']?([^\s;&|\"')]+)", cmd)
+        root = main if at_root else None
+        for d in dirs:
+            d = os.path.expanduser(d)
+            d = d if os.path.isabs(d) else os.path.join(cwd, d)
+            if os.path.isdir(d):
+                m, r = main_checkout(d)
+                if r:
+                    root = m
+        if not root:
+            return
+        flat = re.sub(r"\bgit\s+-C\s+\S+", "git", cmd)
         for pat, what in BASH_WRITES:
-            if re.search(pat, cmd):
-                if what == "git переключает дерево" and re.search(r"--detach\s+origin/", cmd):
+            if re.search(pat, flat):
+                if what == "git переключает дерево" and re.search(r"--detach\s+origin/", flat):
                     continue  # корень держат отцепленным на origin — это его норма
-                deny(main, what)
+                deny(root, what)
 
 
 if __name__ == "__main__":
