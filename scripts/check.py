@@ -355,7 +355,10 @@ def run(repo, mem_override=None, quiet=False):
     mem = memory_dir(repo, mem_override)
     memfiles = sorted(mem.glob("*.md")) if mem.is_dir() else []
     mem_names = {f.stem for f in memfiles}
-    specfiles = sorted((repo / "openspec" / "specs").glob("*/spec.md"))
+    # Спеки живут в двух местах: openspec (закрыт с 24.09) и доки capability
+    # docflow. Читается всё, что есть в репо.
+    specfiles = sorted((repo / "openspec" / "specs").glob("*/spec.md")) \
+        + sorted((repo / "backlog" / "docs" / "capabilities").glob("*.md"))
     _, arch = changes(repo)
 
     findings = collections.defaultdict(list)
