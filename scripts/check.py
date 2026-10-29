@@ -323,6 +323,9 @@ def report(repo, idx, mem, memfiles, specfiles, findings, hyg=None):
              ("символ", "СИМВОЛЫ — нет в коде  ·  здесь живёт чужой словарь, читай глазами")]
     total = 0
     for key, title in order:
+        if key == "заявка" and not (repo / "openspec" / "changes").is_dir():
+            print(f"\n{title}\n  не проверяется: нет openspec/changes (закрытые задачи Backlog не читаются)")
+            continue
         rows = collections.OrderedDict()
         for tok, why, src in findings[key]:
             rows.setdefault((tok, why), []).append(src)

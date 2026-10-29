@@ -91,10 +91,3 @@ End every architecture document with a **"Ready for Implementation"** checklist:
 - [ ] Phasing agreed upon
 
 Only when this checklist is complete should work be handed to backend-architect or frontend-developer.
-```
-
----
-
-**Как использовать в VS Code с Claude Code:**
-```
-/system-architect Мне нужно спроектировать [опиши задачу]
