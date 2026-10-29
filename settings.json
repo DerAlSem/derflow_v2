@@ -79,18 +79,7 @@
       "timeout": 5
      }
     ]
-   },
-   {
-    "matcher": "Skill|Bash|Task|Agent",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/openspec-critique-gate.sh",
-            "timeout": 10,
-            "statusMessage": "Гейт критик-слоя"
-          }
-        ]
-      }
+   }
     ],
     "PostToolUse": [
       {
@@ -99,17 +88,6 @@
             "type": "command",
             "command": "$HOME/.claude/hooks/context-meter.py --tool",
             "timeout": 5
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/openspec-reap-gate.sh",
-            "timeout": 10
           }
         ]
       }
