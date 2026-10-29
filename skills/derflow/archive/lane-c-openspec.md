@@ -1,7 +1,18 @@
 # derflow · Lane C на openspec — вынесено из движка 29.10.2026
 
-Дословный перенос четырёх глав `_lane-c.md`: цикл, reap-гейт, C-drain, входы. Правил не менял.
-Нужен только репо, где ещё есть `openspec/` без `backlog/config.yml`.
+Четыре главы `_lane-c.md` перенесены дословно: цикл, reap-гейт, C-drain, входы. Шапка и схема цикла
+восстановлены из `d1d1b72` (первый перенос их потерял). Правил не менял.
+Нужен только в репо БЕЗ `backlog/config.yml`. Есть `backlog/config.yml` — заявки ведёт `docflow`, даже
+если `openspec/` лежит рядом (миграция не закончена): новых заявок в openspec не заводить.
+
+`openspec/` локальный в каждом репо; формат артефактов держит его схема (`schemas/<name>/schema.yaml`
+плюс `templates/`) — она источник правды.
+
+```
+brainstorming → /opsx:explore → /opsx:propose
+  → check.py → [ОДИН круг критики] → сведение → механика
+  → /opsx:apply → свип «код против спеки» → /opsx:archive
+```
 
 ## Цикл → archive/lane-c-cycle.md
 

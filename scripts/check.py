@@ -355,10 +355,11 @@ def run(repo, mem_override=None, quiet=False):
     mem = memory_dir(repo, mem_override)
     memfiles = sorted(mem.glob("*.md")) if mem.is_dir() else []
     mem_names = {f.stem for f in memfiles}
-    # Спеки живут в двух местах: openspec (закрыт с 24.09) и доки capability
-    # docflow. Читается всё, что есть в репо.
-    specfiles = sorted((repo / "openspec" / "specs").glob("*/spec.md")) \
-        + sorted((repo / "backlog" / "docs" / "capabilities").glob("*.md"))
+    # Спеки живут в двух местах: доки capability docflow и openspec (закрыт с 24.09).
+    # bl-migrate копирует spec.md в доку и оставляет оригинал: после первой правки
+    # доки оригинал врёт вечно. Есть доки — читаются только они.
+    caps = sorted((repo / "backlog" / "docs" / "capabilities").glob("*.md"))
+    specfiles = caps or sorted((repo / "openspec" / "specs").glob("*/spec.md"))
     _, arch = changes(repo)
 
     findings = collections.defaultdict(list)
@@ -557,6 +558,17 @@ def selftest():
         else:
             print(f"✗ укус не сработал: путь={'src/app.py' in bitten}, "
                   f"символ ложно={'get_balance' in bitten}"); ok = False
+
+        # docflow: доки capability читаются, замороженная копия openspec молчит
+        caps = repo / "backlog" / "docs" / "capabilities"
+        caps.mkdir(parents=True)
+        (caps / "doc-1 - billing.md").write_text("# billing\n\nЗовёт `DocOnlyGhost`.\n")
+        got2 = toks(run(repo, mem_override=memd, quiet=True))
+        if "DocOnlyGhost" in got2 and "PromotionService" not in got2:
+            print("✓ docflow: дока capability читается, копия openspec рядом молчит")
+        else:
+            print(f"✗ docflow-корпус: дока читается={'DocOnlyGhost' in got2}, "
+                  f"копия openspec ложно жива={'PromotionService' in got2}"); ok = False
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print()

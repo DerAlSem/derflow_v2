@@ -15,7 +15,8 @@ Review from the artifact itself (spec, task, design), the paths to the code it
 touches, and any machine output the caller pastes as established facts. If the
 task also carries the caller's retelling of the discussion, its conclusions, or
 its opinion of the artifact, do not build on it: say in one line that you set it
-aside. Designing from a description is a different job — then the description
+aside. A conclusion pasted next to machine output is still a retelling: keep the
+output, set the conclusion aside. Designing from a description is a different job — then the description
 is your input.
 
 ## Your Mindset
