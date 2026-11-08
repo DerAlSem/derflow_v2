@@ -6,30 +6,33 @@
 #   bl-done.sh <ID>                       закрыть (нужна правка backlog/docs)
 #   bl-done.sh <ID> --no-doc "<причина>"  закрыть без правки доки, с причиной
 #
-# «Правка доки» = изменение под backlog/docs с момента взятия задачи:
-# незакоммиченное в дереве или коммит новее замка.
+# «Правка доки» = правка backlog/docs по дороге задачи: незакоммиченное
+# в дереве или коммит, трогавший и файл задачи, и backlog/docs.
+# (База — сама задача, не замок: его передача обнуляла отсчёт.)
 set -euo pipefail
 
 id="${1:?нужен ID задачи}"
-common="$(git rev-parse --path-format=absolute --git-common-dir)"
-owner="$common/bl-locks/$id/owner"
 here="$(cd "$(dirname "$0")" && pwd)"
 
-since=""
-[ -f "$owner" ] && since="$(sed -n 's/^since: //p' "$owner")"
+# Файл задачи — база doc-гейта; путь в task view относительный.
+task_json="$(backlog task view "$id" --json")"
+task_path="$(printf '%s' "$task_json" | python3 -c '
+import json, os, sys
+p = json.load(sys.stdin)["task"]["path"]
+print(os.path.relpath(p) if os.path.isabs(p) else p)')"
 
+# Дока правлена по дороге задачи: грязь в дереве или общий коммит
+# задачи и доков. Замок не участвует.
 doc_touched() {
   git status --porcelain -- backlog/docs | grep -q . && return 0
-  [ -n "$since" ] || return 1
-  # строго ПОСЛЕ взятия: коммит в ту же секунду — ещё чужая работа
-  git log -n 50 --format=%ct -- backlog/docs \
-    | awk -v s="$since" '$1 > s { f = 1 } END { exit !f }'
+  comm -12 <(git log -n 300 --format=%H -- "$task_path" | sort -u) \
+           <(git log -n 300 --format=%H -- backlog/docs | sort -u) \
+    | grep -q .
 }
 
 # Готовность самой задачи: все AC и DoD отмечены, итог записан.
 # Лишний критерий не обходится флагом — его снимают --remove-ac с причиной
 # в заметках, чтобы «не сделано» не закрывалось молча.
-task_json="$(backlog task view "$id" --json)"
 unready="$(printf '%s' "$task_json" | python3 -c '
 import json, sys
 t = json.load(sys.stdin)["task"]
@@ -53,7 +56,7 @@ if [ "${2:-}" = "--no-doc" ]; then
   backlog task edit "$id" --append-notes "Дока не менялась: $why" \
     --plain >/dev/null
 elif ! doc_touched; then
-  echo "❌ $id: backlog/docs не менялся с момента взятия." >&2
+  echo "❌ $id: backlog/docs не менялся по дороге задачи." >&2
   echo "   Обнови doc capability, которую задача изменила," >&2
   echo "   или закрой с --no-doc \"<почему доке нечего добавить>\"." >&2
   exit 2
