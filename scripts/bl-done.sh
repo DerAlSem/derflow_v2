@@ -15,7 +15,7 @@ id="${1:?нужен ID задачи}"
 here="$(cd "$(dirname "$0")" && pwd)"
 
 # Файл задачи — база doc-гейта; путь в task view относительный.
-task_json="$(backlog task view "$id" --json")"
+task_json="$(backlog task view "$id" --json)"
 task_path="$(printf '%s' "$task_json" | python3 -c '
 import json, os, sys
 p = json.load(sys.stdin)["task"]["path"]
