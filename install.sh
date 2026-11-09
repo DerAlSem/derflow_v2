@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Раскладка derflow по средам: Claude Code, ZCode/ztui, opencode.
+# Раскладка derflow по средам: Claude Code, ZCode/ztui, opencode,
+# Kimi Code CLI (kimi-code), Kimi Work desktop (kimi-work).
 #
 #   ./install.sh                 # собрать hosts/*/generated и разложить симлинки
 #   ./install.sh --check         # ничего не менять: дрейф сборки и живых путей, код 1 при дрейфе
 #   ./install.sh --claude-dir D  # раскладывать claude-часть в D (стенд RED: CLAUDE_CONFIG_DIR)
-#   ./install.sh --only claude   # одна среда: claude | zcode | opencode
+#   ./install.sh --only claude   # одна среда: claude | zcode | opencode | kimi-code | kimi-work
 #
 # Правило: живой путь среды — симлинк в ЭТОТ чекаут. Реальный файл/каталог на
 # месте симлинка не затирается, а уезжает в ~/backups/derflow-install-<время>/.
@@ -98,6 +99,8 @@ fi
 # 3. ZCode / ztui
 if want zcode && [ -d "$ZCODE_DIR" ]; then
   for d in "$REPO"/core/skills/* "$REPO"/skills/*; do
+    # рыхлый файл-симлинк в skills/ валит сканер ZCode целиком (ENOTDIR, DF-2)
+    [ -d "$d" ] || continue
     link "$d" "$ZCODE_DIR/skills/$(basename "$d")"
   done
   for f in "$REPO"/hosts/zcode/generated/agents/*.md; do
