@@ -58,9 +58,23 @@ install.sh       сборка + симлинки во все среды; --check
   комментарию в `scan.ts`, симлинки в `~/.zcode/skills` поддерживаются. Не
   проверены десктоп ZCode и интерактивный TUI. Задача — `DF-2` в
   `~/dev/derflow/backlog`.
-- **Kimi — неизвестно.** Отдельного CLI на машине нет (`which kimi` пусто,
-  `~/.kimi*` нет). Гипотеза: Kimi — модель-провайдер внутри ZCode, тогда среда
-  та же, что у ZCode. `~/dev/kimi` — рабочая папка с задачами, а не конфиг.
+- **Kimi — проверено 09.11.2026 (сессией Kimi Work).** Сред две: десктоп
+  Kimi Work 3.2.25 (движок kimi-code 2.4.1, вендорен из
+  `github.com/MoonshotAI/kimi-code`) и отдельно поставленный Kimi Code CLI
+  2.5.2 (`~/.kimi-code/bin/kimi`, инсталлер `code.kimi.com/kimi-code/install.sh`).
+  Обе подключены: `hosts/kimi-work/` и `hosts/kimi-code/`, блоки 5–6 в
+  `install.sh`. Отличия сред: десктопу daimon собирает индекс скиллов сам и
+  симлинки-каталоги НЕ видит → `rsync`-копии `derflow`/`docflow` в
+  `daimon/skills/`; ядро CLI по симлинкам ходит (скиллы, `agents/`,
+  `AGENTS.md` — проверено живыми прогонами `kimi -p`). Хуки только у CLI
+  (`~/.kimi-code/config.toml`, секции `[[hooks]]`; эталон —
+  `hosts/kimi-code/config.toml`, ключи туда не коммитим); у десктопа оба
+  `config.toml` генерирует daimon — ручная секция не живёт. Расщепление:
+  CLI — `~/.kimi-code/scripts/hand.sh` (сеялка `kimi -p` + интерактив
+  `kimi -c`); у десктопа hand.sh нет — `kimi-daimon run --prompt`
+  конфликтует с живым приложением за `runner.lock`, путь — одноразовая
+  local_conversation-автоматизация или ручная новая сессия.
+  `~/dev/kimi` — рабочая папка с задачами, а не конфиг.
 
 ## 4. Твоя задача
 

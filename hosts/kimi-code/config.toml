@@ -1,0 +1,66 @@
+# Эталон секции hooks для ~/.kimi-code/config.toml (Kimi Code CLI).
+#
+# Живой конфиг НЕ линкуется и install.sh не сверяет: он держит ещё провайдера
+# и ключ, а ключи в публичный репо не коммитим. Провайдер и модели для живого
+# конфига берутся из daimon-конфига Kimi Work:
+#   ~/Library/Application Support/kimi-desktop/daimon-share/daimon/config.json
+#   → credentials.kimiCode (apiKey, baseUrl) и model.models (алиасы).
+#
+# Синтаксис (доки kimi-code, customization/hooks):
+#   [[hooks]] — поля event, matcher (regex, опционально), command, timeout
+#   (секунды, 1–600, по умолчанию 30); других полей быть не должно.
+#   stdin хука — JSON события (snake_case, форма как у Claude Code);
+#   exit 0 — пуск (stdout едет в контекст), exit 2 — блок (stderr — причина),
+#   прочее и таймаут — fail-open. События: SessionStart(startup|resume),
+#   UserPromptSubmit, PreToolUse/PostToolUse (matcher — имя инструмента),
+#   Stop, SubagentStop, Notification, PreCompact и др.
+#
+# Набор — адаптация hosts/claude/settings.json. glm-blind опущен: он про
+# слепоту GLM к скринам, модели kimi изображения читают.
+# ⚠️ Совместимость скриптов с payload kimi проверена частично: waiting.py,
+# canon-budget.py, stale-root.py stdin почти не читают; context-meter.py и
+# canon-drift.py знают контракты Claude/ZCode и под kimi могут молчать или
+# ошибаться (fail-open) — ветка под kimi для них не написана (09.11.2026).
+
+[[hooks]]
+event = "SessionStart"
+matcher = "startup|resume"
+command = "python3 $HOME/.claude/scripts/waiting.py wake"
+timeout = 5
+
+[[hooks]]
+event = "SessionStart"
+matcher = "startup|resume"
+command = "python3 $HOME/.claude/scripts/canon-budget.py || true"
+timeout = 5
+
+[[hooks]]
+event = "SessionStart"
+matcher = "startup|resume"
+command = "python3 $HOME/.claude/scripts/stale-root.py || true"
+timeout = 5
+
+[[hooks]]
+event = "UserPromptSubmit"
+command = "b=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) && n=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ') && echo \"git: $b · $n uncommitted file(s)\" || true"
+
+[[hooks]]
+event = "UserPromptSubmit"
+command = "$HOME/.claude/hooks/canon-drift.py"
+timeout = 5
+
+[[hooks]]
+event = "UserPromptSubmit"
+command = "$HOME/.claude/hooks/context-meter.py"
+timeout = 5
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash|Write|Edit|NotebookEdit"
+command = "$HOME/.claude/hooks/consult-receipt.py"
+timeout = 5
+
+[[hooks]]
+event = "PostToolUse"
+command = "$HOME/.claude/hooks/context-meter.py --tool"
+timeout = 5

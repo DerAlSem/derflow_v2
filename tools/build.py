@@ -21,7 +21,8 @@ import argparse, pathlib, re, shutil, sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CORE = ROOT / "core"
-HOSTS = {"claude": "CLAUDE.md", "zcode": "AGENTS.md"}
+HOSTS = {"claude": "CLAUDE.md", "zcode": "AGENTS.md",
+         "kimi-code": "AGENTS.md", "kimi-work": "AGENTS.md"}
 SLOT = re.compile(r"<!-- slot:(\S+) -->\n(.*?)<!-- /slot -->\n", re.S)
 
 

@@ -67,7 +67,7 @@ link() {
 if [ "$CHECK" = 1 ]; then
   tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
   python3 "$REPO/tools/build.py" --out "$tmp"
-  for h in claude zcode; do
+  for h in claude zcode kimi-code kimi-work; do
     if ! diff -rq "$tmp/$h" "$REPO/hosts/$h/generated" >/dev/null; then
       echo "⚠️  hosts/$h/generated отстал от core/ + hosts/$h/ — прогони ./install.sh"
       diff -r "$tmp/$h" "$REPO/hosts/$h/generated" | head -20
@@ -123,6 +123,56 @@ if want opencode && [ -d "$OPENCODE_DIR" ]; then
       link "$f" "$OPENCODE_DIR/$sub/$(basename "$f")"
     done
   done
+fi
+
+# 5. Kimi Code CLI (~/.kimi-code; бинарь ставит code.kimi.com/kimi-code/install.sh).
+# Ядро по симлинкам ходит (замер 09.11.2026, kimi 2.5.2: скиллы-каталоги,
+# каталог agents/, AGENTS.md — всё по симлинкам видно). Живой config.toml НЕ
+# трогаем: там ключ провайдера (эталон хуков — hosts/kimi-code/config.toml).
+KIMI_CODE_DIR="$HOME/.kimi-code"
+if want kimi-code && [ -d "$KIMI_CODE_DIR" ]; then
+  for d in "$REPO"/core/skills/* "$REPO"/skills/*; do
+    # Только каталоги: плоские _*.md в skills/ — служебные, kimi зарегистрировал
+    # бы их как скиллы (плоская форма .md у него поддерживается).
+    [ -d "$d" ] && link "$d" "$KIMI_CODE_DIR/skills/$(basename "$d")"
+  done
+  for f in "$REPO"/hosts/kimi-code/generated/agents/*.md; do
+    # VENDOR.md — без фронтмэттера: kimi пропустил бы его с варнингом на
+    # каждом старте; это служебная памятка, а не агент.
+    [ "$(basename "$f")" = "VENDOR.md" ] && continue
+    link "$f" "$KIMI_CODE_DIR/agents/$(basename "$f")"
+  done
+  link "$REPO/hosts/kimi-code/generated/AGENTS.md" "$KIMI_CODE_DIR/AGENTS.md"
+  for f in "$REPO"/hosts/kimi-code/scripts/*; do
+    link "$f" "$KIMI_CODE_DIR/scripts/$(basename "$f")"
+  done
+fi
+
+# 6. Kimi Work desktop: daimon НЕ ходит по симлинкам каталогов скиллов
+# (замер 09.11.2026: симлинк в daimon/skills невидим для `kimi-daimon skill
+# list`, настоящая копия видна) — только копии, дрейф ловит --check.
+KIMI_WORK_DIR="$HOME/Library/Application Support/kimi-desktop/daimon-share/daimon"
+if want kimi-work && [ -d "$KIMI_WORK_DIR/skills" ]; then
+  for s in derflow docflow; do
+    if [ "$CHECK" = 1 ]; then
+      diff -rq "$REPO/core/skills/$s" "$KIMI_WORK_DIR/skills/$s" >/dev/null 2>&1 \
+        || { echo "⚠️  kimi-work: skills/$s отстал от core — прогони ./install.sh"; drift=1; }
+    else
+      rsync -a --delete "$REPO/core/skills/$s/" "$KIMI_WORK_DIR/skills/$s/"
+      echo "📋 $KIMI_WORK_DIR/skills/$s ← core/skills/$s (копия)"
+    fi
+  done
+  # Глобальные инструкции ядра десктопа — KIMI_CODE_HOME/AGENTS.md. Симлинк
+  # для файла ядром, скорее всего, читается (в CLI — проверено), но daimon
+  # собирает индекс сам, и рисковать здесь незачем — копия.
+  kw_agents="$KIMI_WORK_DIR/runtime/kimi-code/home/AGENTS.md"
+  if [ "$CHECK" = 1 ]; then
+    diff -q "$REPO/hosts/kimi-work/generated/AGENTS.md" "$kw_agents" >/dev/null 2>&1 \
+      || { echo "⚠️  kimi-work: home/AGENTS.md отстал/отсутствует — прогони ./install.sh"; drift=1; }
+  else
+    cp "$REPO/hosts/kimi-work/generated/AGENTS.md" "$kw_agents"
+    echo "📋 $kw_agents ← hosts/kimi-work/generated/AGENTS.md (копия)"
+  fi
 fi
 
 if [ "$CHECK" = 1 ]; then
