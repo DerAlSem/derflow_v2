@@ -88,10 +88,24 @@ if want claude; then
   done
   link "$REPO/waiting" "$CLAUDE_DIR/waiting"
   link "$REPO/hosts/claude/generated/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
-  if [ -f "$CLAUDE_DIR/settings.json" ] && \
-     ! diff -q "$CLAUDE_DIR/settings.json" "$REPO/hosts/claude/settings.json" >/dev/null; then
-    echo "⚠️  settings.json расходится с hosts/claude/settings.json (не линкуется — сверь руками):"
-    diff "$REPO/hosts/claude/settings.json" "$CLAUDE_DIR/settings.json" | head -20
+  # Сверяется ТОЛЬКО hooks: derflow владеет проводкой хуков, остальное в живом
+  # settings.json пишет сам Claude Code (autoMode-окружение, extraKnownMarketplaces
+  # — замер 09.11.2026: формулировки сменились дважды за 10 минут без людей,
+  # целый diff — вечный ложный дрейф).
+  if ! python3 - "$CLAUDE_DIR/settings.json" "$REPO/hosts/claude/settings.json" <<'PY'
+import json, sys
+try:
+    live = json.load(open(sys.argv[1])).get("hooks")
+    canon = json.load(open(sys.argv[2])).get("hooks")
+except (OSError, ValueError) as e:
+    print(f"⚠️  settings.json не читается: {e}")
+    sys.exit(1)
+sys.exit(0 if live == canon else 2)
+PY
+  then
+    echo "⚠️  hooks в settings.json расходятся с hosts/claude/settings.json (не линкуется — сверь руками):"
+    diff <(python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1]))['hooks'],indent=1,sort_keys=True))" "$REPO/hosts/claude/settings.json") \
+         <(python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1]))['hooks'],indent=1,sort_keys=True))" "$CLAUDE_DIR/settings.json") | head -20
     [ "$CHECK" = 1 ] && drift=1
   fi
 fi
