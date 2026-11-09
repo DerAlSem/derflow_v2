@@ -40,7 +40,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "b=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) && n=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ') && echo \"git: $b · $n uncommitted file(s)\" || true"
+            "command": "$HOME/.claude/hooks/git-line.py",
+            "timeout": 5
           },
           {
             "type": "command",

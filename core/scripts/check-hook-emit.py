@@ -145,6 +145,20 @@ try:
               os.path.join(SC, "stale-root.py"), {"cwd": nowhere})
     both_ways("stale-root: не git — молчит в обоих",
               os.path.join(SC, "stale-root.py"), {"cwd": tmp}, allow_empty=True)
+
+    # --- git-line: репозиторий с грязью и не-git каталог -----------------------
+    repo_g = os.path.join(tmp, "gitline")
+    os.makedirs(repo_g)
+    subprocess.run(["git", "init", "-q", repo_g], check=True)
+    # пустой репозиторий не отдаёт ветку (rev-parse HEAD не резолвится) — хук
+    # молчит по делу; для строки с веткой нужен хоть один коммит
+    subprocess.run(["git", "-C", repo_g, "-c", "user.email=t@t", "-c", "user.name=t",
+                    "commit", "-q", "--allow-empty", "-m", "init"], check=True)
+    open(os.path.join(repo_g, "wip.txt"), "w").write("грязь\n")
+    both_ways("git-line: ветка и счёт — JSON равен plain",
+              os.path.join(HOOKS, "git-line.py"), {"cwd": repo_g}, cwd=repo_g)
+    both_ways("git-line: не git — молчит в обоих",
+              os.path.join(HOOKS, "git-line.py"), {"cwd": tmp}, allow_empty=True)
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
     for f in os.listdir(SD) if os.path.isdir(SD) else []:
