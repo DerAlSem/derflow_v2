@@ -23,6 +23,9 @@
 !/waiting/
 !/plans/
 !/backlog/
+!/.claude/
+/.claude/*
+!/.claude/settings.json
 
 # С 09.11.2026 репо живёт в ~/dev/derflow, а не в ~/.claude: секретов рядом
 # больше нет, но белый список оставлен — derflow_v2 публичный, и случайный

@@ -2,6 +2,20 @@
 
 A personal [Claude Code](https://docs.claude.com/en/docs/claude-code) configuration — agents, skills, commands, and settings — that turns fast, chaotic AI-assisted development into a disciplined, right-sized workflow. Its center is a single **router skill** that reads any request in plain language, decides *what kind of task it is*, and routes it to the right specialist with exactly as much process as it warrants — no more, no less. This repo is the versioned backup of that setup and an explanation of the approach behind it.
 
+
+## Layout and install (since 2026-11-09)
+
+The repo lives in `~/dev/derflow`, not inside `~/.claude`. One canon, several hosts:
+
+| Path | What |
+|---|---|
+| `core/` | the canon: `skills/derflow`, `skills/docflow`, `scripts/`, `hooks/`, `schemas/`, `agents/`, and `AGENTS.md` (the global instructions, with `<!-- slot:… -->` blocks) |
+| `hosts/<host>/` | only what really differs per host — `claude`, `zcode` (ZCode/ztui), `opencode`: slot texts, agent frontmatter, host scripts and plugins |
+| `hosts/*/generated/` | built by `tools/build.py`; committed so a hand edit shows up as drift |
+| `skills/` | companion skills (ru-text, copywriting, explore-code, …) |
+
+`./install.sh` builds and symlinks everything into `~/.claude`, `~/.zcode` and `~/.config/opencode`; `./install.sh --check` reports drift and changes nothing. Canon edits take effect at once (hosts read this checkout); slot/agent-head edits after `./install.sh`. Claude Code's `settings.json` is not symlinked (Claude Code writes to it) — `hosts/claude/settings.json` is the reference, `--check` diffs it.
+
 ---
 
 ## The problem
