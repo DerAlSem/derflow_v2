@@ -1024,7 +1024,9 @@ def here_box():
     не «дельта пустая» (Р16).
     """
     try:
-        return repo_box()
+        # ZCode стартует хук не обязательно в каталоге сессии; движок называет
+        # каталог сам (ZCODE_PROJECT_DIR всем command-хукам) — верим ему.
+        return repo_box(os.environ.get("ZCODE_PROJECT_DIR"))
     except Exception:
         return None
 
@@ -1045,6 +1047,16 @@ def close_to(row, here):
         return False
     f = row.fields.get("entry")
     return bool(f) and names_repo(f.value, here.repo)
+
+
+def emit(text):
+    """Вывод по контракту среды: Claude Code читает plain stdout, ZCode —
+    только JSON с additionalContext, plain она молча выбрасывает (канон
+    паттерна — hooks/context-meter.py:emit, замер 09.11.2026)."""
+    if os.environ.get("ZCODE_SESSION_ID"):
+        print(json.dumps({"additionalContext": text}, ensure_ascii=False))
+    else:
+        print(text)
 
 
 def wake():
@@ -1141,7 +1153,7 @@ def wake():
     lines.append("`ack`, `taken` и `done` зовутся ТОЛЬКО по прямой просьбе "
                  "владельца: ассистент, погасивший дельту сам, уничтожает "
                  "строку при ненаступившей отработке.")
-    print("\n".join(lines))
+    emit("\n".join(lines))
     return 0
 
 

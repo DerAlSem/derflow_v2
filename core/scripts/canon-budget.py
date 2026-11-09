@@ -6,9 +6,10 @@ SessionStart (рядом с дельтой реестра) и человеком
 есть «дубль doctor» из спеки: waiting.py по охвату не трогаем.
 Спека: specs/2026-09-13-derflow-rebuild-design.md §4.
 """
-import os, re, sys
+import json, os, re, sys
 
-D = os.path.expanduser("~/.claude/skills/derflow")
+D = os.environ.get("CANON_BUDGET_DIR") or os.path.expanduser(
+    "~/.claude/skills/derflow")   # переопределяется ради стенда, как CANON_DRIFT_SKILLDIR
 MEM = os.path.expanduser(
     "~/.claude/projects/-Users-deralsem--claude/memory/MEMORY.md")
 BUDGET = {"_lane-c.md": 120, "_gates.md": 100, "_capture.md": 120,
@@ -32,6 +33,18 @@ if os.path.exists(MEM) and os.path.getsize(MEM) > MEM_BUDGET:
     bad.append(f"память: индекс {os.path.getsize(MEM)} байт при бюджете "
                f"{MEM_BUDGET} (потолок харнесса ~24 КБ обрежет МОЛЧА) — "
                f"сжимай или вытесняй")
-for line in bad:
-    print("🔴 " + line)
+
+
+def emit(text):
+    """Вывод по контракту среды: Claude Code читает plain stdout, ZCode —
+    только JSON с additionalContext, plain она молча выбрасывает (канон
+    паттерна — hooks/context-meter.py:emit, замер 09.11.2026)."""
+    if os.environ.get("ZCODE_SESSION_ID"):
+        print(json.dumps({"additionalContext": text}, ensure_ascii=False))
+    else:
+        print(text)
+
+
+if bad:
+    emit("\n".join("🔴 " + line for line in bad))
 sys.exit(1 if bad else 0)

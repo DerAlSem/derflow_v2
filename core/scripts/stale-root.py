@@ -22,6 +22,16 @@ def git(*a, cwd):
 LOCK_STALE_H = 24
 
 
+def emit(text):
+    """Вывод по контракту среды: Claude Code читает plain stdout, ZCode —
+    только JSON с additionalContext, plain она молча выбрасывает (канон
+    паттерна — hooks/context-meter.py:emit, замер 09.11.2026)."""
+    if os.environ.get("ZCODE_SESSION_ID"):
+        print(json.dumps({"additionalContext": text}, ensure_ascii=False))
+    else:
+        print(text)
+
+
 def root_dirt(root, common):
     """Грязь основного чекаута — то, что уборка GM-432 нашла руками (14.10.2026):
     корень на ветке с непушенными коммитами и отставанием, правки, задачи Backlog
@@ -61,6 +71,9 @@ def root_dirt(root, common):
 
 
 def main():
+    # Сообщения собираются и печатаются ОДНИМ куском в конце: у ZCode весь
+    # stdout хука — один JSON-документ, две печати там не дошли бы вовсе.
+    out = []
     cwd = os.getcwd()
     try:
         cwd = json.load(sys.stdin).get("cwd") or cwd
@@ -68,7 +81,7 @@ def main():
         pass
     rc, top, _ = git("rev-parse", "--show-toplevel", cwd=cwd)
     if rc:
-        return
+        return out
     _, gd, _ = git("rev-parse", "--absolute-git-dir", cwd=top)
     _, cd, _ = git("rev-parse", "--git-common-dir", cwd=top)
     common = os.path.realpath(os.path.join(top, cd))
@@ -76,13 +89,13 @@ def main():
         root = os.path.dirname(common)
         dirt = root_dirt(root, common)
         if dirt:
-            print(f"🔴 основной чекаут {os.path.basename(root)} грязный — "
-                  + "; ".join(dirt) + ". Корень только для чтения: разобрать "
-                  "или сказать владельцу; свою работу — в ворктри.")
+            out.append(f"🔴 основной чекаут {os.path.basename(root)} грязный — "
+                       + "; ".join(dirt) + ". Корень только для чтения: разобрать "
+                       "или сказать владельцу; свою работу — в ворктри.")
     if os.path.realpath(gd) != common:
-        return  # ворктри: его HEAD — чужая работа
+        return out  # ворктри: его HEAD — чужая работа
     if git("symbolic-ref", "-q", "HEAD", cwd=top)[0] == 0:
-        return  # на ветке: отставание ветки — не наша забота
+        return out  # на ветке: отставание ветки — не наша забота
 
     base = None
     _, log, _ = git("reflog", "-200", "--format=%gs", cwd=top)
@@ -95,13 +108,13 @@ def main():
                          "refs/remotes/origin/HEAD", cwd=top)
         base = ref if rc == 0 else None
     if not base or git("rev-parse", "-q", "--verify", base, cwd=top)[0]:
-        return
+        return out
 
     _, behind, _ = git("rev-list", "--count", f"HEAD..{base}", cwd=top)
     _, ahead, _ = git("rev-list", "--count", f"{base}..HEAD", cwd=top)
     behind, ahead = int(behind or 0), int(ahead or 0)
     if behind == 0:
-        return
+        return out
     fh = os.path.join(gd, "FETCH_HEAD")
     age = (f"fetch {time.strftime('%d.%m %H:%M', time.localtime(os.path.getmtime(fh)))}"
            if os.path.exists(fh) else "fetch не делался")
@@ -111,9 +124,9 @@ def main():
            f"(база — {age}; сети на старте нет). ")
 
     if ahead:
-        print(red + f"Сдвиг не делаю: на корне {ahead} своих коммитов вне {base}. "
-              "Ответы по коду из корня — по старому коду.")
-        return
+        out.append(red + f"Сдвиг не делаю: на корне {ahead} своих коммитов вне {base}. "
+                   "Ответы по коду из корня — по старому коду.")
+        return out
     # грязное дерево не мешает само: checkout без -f правок не губит — переносит
     # их или отказывает (замер gmb_v2: 10 застейдженных миграций = develop)
     # checkout 1500 коммитов может не влезть в таймаут хука; отдельная сессия
@@ -124,20 +137,23 @@ def main():
     try:
         _, err = p.communicate(timeout=3)
     except subprocess.TimeoutExpired:
-        print(f"↻ корень {name}: сдвигаю {head} → {base} (+{behind}), checkout идёт "
-              "в фоне; до его конца файлы корня — вперемешку.")
-        return
+        out.append(f"↻ корень {name}: сдвигаю {head} → {base} (+{behind}), checkout идёт "
+                   "в фоне; до его конца файлы корня — вперемешку.")
+        return out
     if p.returncode:
         files = [l.strip() for l in err.splitlines() if l.startswith(("\t", "    "))]
         why = f"мешают неотслеживаемые: {', '.join(files[:4])}" if files else err[:160]
-        print(red + f"checkout отказал — {why}.")
-        return
+        out.append(red + f"checkout отказал — {why}.")
+        return out
     _, dirty, _ = git("status", "--porcelain", "--untracked-files=no", cwd=top)
     kept = f"; перенесено локальных правок: {len(dirty.splitlines())}" if dirty else ""
-    print(f"↻ корень {name}: сдвинут {head} → {base} (+{behind}, база — {age}{kept}).")
+    out.append(f"↻ корень {name}: сдвинут {head} → {base} (+{behind}, база — {age}{kept}).")
+    return out
 
 if __name__ == "__main__":
     try:
-        main()
+        out = main()
     except Exception as e:
-        print(f"🔴 stale-root: сторож упал ({e.__class__.__name__}: {e})")
+        out = [f"🔴 stale-root: сторож упал ({e.__class__.__name__}: {e})"]
+    if out:
+        emit("\n".join(out))

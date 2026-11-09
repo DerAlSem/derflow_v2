@@ -54,6 +54,16 @@ STATE_DIR = os.path.expanduser("~/.claude/state")
 # поведения, и она не грузится в контекст на каждой задаче.
 
 
+def emit(text):
+    """Вывод по контракту среды: Claude Code читает plain stdout, ZCode —
+    только JSON с additionalContext, plain она молча выбрасывает (канон
+    паттерна — context-meter.py:emit, замер 09.11.2026)."""
+    if os.environ.get("ZCODE_SESSION_ID"):
+        print(json.dumps({"additionalContext": text}, ensure_ascii=False))
+    else:
+        print(text)
+
+
 def canon():
     """{имя: (mtime, первая строка-заголовок, тело)} по файлам канона."""
     out = {}
@@ -216,8 +226,8 @@ def main():
             # Жатву делает `context-meter.py` — он подчищает весь `state/`.
             remember(session, sig)
     if bad:
-        print("⟳ канон derflow уехал на диске: " + ", ".join(bad)
-              + " — перечитай эти файлы до следующего решения")
+        emit("⟳ канон derflow уехал на диске: " + ", ".join(bad)
+             + " — перечитай эти файлы до следующего решения")
     return 0
 
 
