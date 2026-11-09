@@ -65,7 +65,11 @@ def main() -> None:
         parts += quota_lines()
     except Exception:
         pass
-    print("[ТАРИФ: " + " · ".join(parts) + "]")
+    # Контракт ZCode: plain stdout движок хуков молча выбрасывает — в контекст
+    # идёт только JSON с additionalContext (замер 09.11.2026, исходники
+    # ~/dev/ZCode packages/core/src/hooks/configured-runner-callback.ts).
+    line = "[ТАРИФ: " + " · ".join(parts) + "]"
+    print(json.dumps({"additionalContext": line}, ensure_ascii=False))
 
 
 if __name__ == "__main__":

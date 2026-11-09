@@ -10,6 +10,17 @@
 именно эта сумма перечитывается на КАЖДОМ следующем ходу и составляет
 основную часть счёта (замер: `~/.claude/scripts/context-spend.py`).
 
+ZCode (ztui и десктоп — один движок) отличается от Claude Code дважды, и оба
+отличия — контракт среды, а не этого скрипта (замер 09.11.2026, исходники
+`~/dev/ZCode` `packages/core/src/hooks/`): 1) `transcript_path` из stdin —
+суррогат во временном каталоге (для PostToolUse пустой, для UserPromptSubmit
+одна строка промпта), настоящий ход лежит в
+`~/.zcode/cli/rollout/model-io-<session_id>.jsonl` — записи `model_io`,
+usage в `response.usage` camelCase, сабагенты отсеиваются по `querySource`;
+2) plain stdout движок молча выбрасывает как «диагностический текст» — в
+контекст идёт только JSON `{"additionalContext": …}`. Среда опознаётся по
+`ZCODE_SESSION_ID` в env: движок ставит его всем command-хукам.
+
 `ctx:` — состояние, а не событие: оно ни с чем не сравнивается. Поэтому рядом
 печатаются два СОБЫТИЯ, оба машинные и даром:
 
@@ -27,6 +38,11 @@ import json, os, re, subprocess, sys, time
 
 TAIL_BYTES = 4_000_000       # хвост транскрипта; полный файл бывает сотнями МБ
 WARN, LOUD = 150_000, 300_000
+# Пороги ZCode (GLM-5.3, обе среды — ztui и десктоп). Лимит модели 1М, но
+# правило владельца (09.11.2026) — тяжёлые сессии не таскать: со 130k агент
+# ОЦЕНИВАЕТ, уведёт ли следующий ход контекст за 200k, и уведёт — предлагает
+# расщепление; с 170k расщепляет сам и продолжает в новой — запас хода до 200k.
+WARN_Z, LOUD_Z = 130_000, 170_000
 # Вторая полоса в сессии = граница СЕССИЙ (derflow/SKILL.md). Замер 14.09.2026:
 # 137 сессий со вторым анонсом потратили ПОСЛЕ него $29k из $55,7k всего счёта,
 # а по полосе второго анонса разрыв восьмикратный — A $26 и D $34 за сессию
@@ -57,6 +73,11 @@ def lanes(lines):
     сам SKILL.md с шаблоном «Lane `<id>` → `<agent>`» и совпал бы (урок cost.py).
     Сабагент отсеивается — его анонс не наш.
 
+    Два формата транскрипта: Claude — `type:"assistant"`, текст в
+    `message.content[]`; ZCode — `querySource:"main_turn"`, текст хода в
+    `response.text` (историю в `request.body.messages` НЕ читать: там
+    продублирован каждый прошлый анонс на каждый ход).
+
     Хвост в 4 МБ: у очень длинной сессии первый анонс может из него выпасть, и
     тогда детектор просто не сработает. Промолчать здесь дешевле, чем соврать.
     Проверка по корпусу 14.09.2026: детектор видит 104 перехода из 137 найденных
@@ -64,18 +85,23 @@ def lanes(lines):
     """
     out = []
     for line in lines or ():
-        if '"assistant"' not in line or "Lane" not in line:
+        if "Lane" not in line:
             continue
         try:
             d = json.loads(line)
         except ValueError:
             continue
-        if d.get("type") != "assistant" or d.get("isSidechain"):
+        if d.get("isSidechain"):
             continue
-        for b in (d.get("message") or {}).get("content") or []:
-            if not (isinstance(b, dict) and b.get("type") == "text"):
-                continue
-            m = ANNOUNCE.search(b.get("text", ""))
+        texts = []
+        if d.get("type") == "assistant":            # Claude
+            for b in (d.get("message") or {}).get("content") or []:
+                if isinstance(b, dict) and b.get("type") == "text":
+                    texts.append(b.get("text", ""))
+        elif d.get("querySource") == "main_turn":   # ZCode
+            texts = [((d.get("response") or {}).get("text") or "")]
+        for t in texts:
+            m = ANNOUNCE.search(t)
             if m:
                 out.append(m.group(1).replace("`", "").strip(" *"))
                 break
@@ -83,7 +109,7 @@ def lanes(lines):
 
 
 def context_from(lines):
-    for line in reversed(lines or []):
+    for line in reversed(lines or ()):
         if '"usage"' not in line:
             continue
         try:
@@ -92,11 +118,20 @@ def context_from(lines):
             continue
         if d.get("isSidechain"):      # сабагент держит свой контекст, не наш
             continue
-        u = (d.get("message") or {}).get("usage") or {}
-        if not u:
+        if d.get("querySource", "main_turn") != "main_turn":   # ZCode: то же
             continue
-        return (u.get("input_tokens", 0) + u.get("cache_creation_input_tokens", 0)
-                + u.get("cache_read_input_tokens", 0))
+        u = (d.get("message") or {}).get("usage") or {}        # Claude
+        if u:
+            return (u.get("input_tokens", 0) + u.get("cache_creation_input_tokens", 0)
+                    + u.get("cache_read_input_tokens", 0))
+        u = (d.get("response") or {}).get("usage") or {}       # ZCode
+        if u:
+            # inputTokens — ПОЛНЫЙ вход хода; cache-поля — метрики попадания,
+            # не слагаемые (так считает и сам ZCode — core/src/compact/manual.ts:158).
+            n = u.get("inputTokens") or ((u.get("cacheReadTokens") or 0)
+                                         + (u.get("cacheWriteTokens") or 0))
+            if n:
+                return n
     return None
 
 
@@ -115,6 +150,29 @@ def current_branch(cwd):
     if p.returncode:                  # не репозиторий / нет коммитов
         return None
     return p.stdout.decode("utf-8", "replace").strip() or None
+
+
+def is_zcode():
+    """ZCode ставит ZCODE_SESSION_ID всем command-хукам; Claude Code — нет."""
+    return bool(os.environ.get("ZCODE_SESSION_ID"))
+
+
+def zcode_transcript(session):
+    """Настоящий транскрипт ZCode по session_id (stdin-поле transcript_path —
+    суррогат движка, см. докстринг). Нет файла — нет показания."""
+    if not session:
+        return ""
+    p = os.path.expanduser(f"~/.zcode/cli/rollout/model-io-{session}.jsonl")
+    return p if os.path.exists(p) else ""
+
+
+def emit(text):
+    """Вывод по контракту среды: Claude Code читает plain stdout, ZCode —
+    только JSON с additionalContext, plain она молча выбрасывает."""
+    if is_zcode():
+        print(json.dumps({"additionalContext": text}, ensure_ascii=False))
+    else:
+        print(text)
 
 
 def read_state(path):
@@ -166,16 +224,26 @@ def ago(sec):
     return f"{sec / 86_400:.0f}д"
 
 
-def loud_msg():
+def loud_msg(zcode):
     """Один текст на оба входа: порог, названный дважды по-разному, — два правила."""
-    return ("‼ расщепи сессию САМ: доведи хендофф до «здесь и сейчас» и позови "
-            "~/.claude/scripts/hand.sh <каталог> (derflow/_capture.md)")
+    hand = "~/.zcode/scripts/hand.sh" if zcode else "~/.claude/scripts/hand.sh"
+    return ("‼ расщепи сессию САМ: доведи хендофф до «здесь и сейчас», позови "
+            f"{hand} <каталог> [файл] и продолжай в новой сессии (derflow/_capture.md)")
 
 
-def lane2_msg(lane):
+def warn_msg(zcode):
+    if zcode:
+        # Правило владельца 09.11.2026: 130k+ — оценка и ПРЕДЛОЖЕНИЕ расщепления.
+        return (" ⚠ уведёт ли следующий ход контекст за 200k? Уведёт — предложи "
+                "расщепление (~/.zcode/scripts/hand.sh)")
+    return " ⚠ дальше каждый ход платит за этот контекст"
+
+
+def lane2_msg(lane, zcode):
+    hand = "~/.zcode/scripts/hand.sh" if zcode else "~/.claude/scripts/hand.sh"
     return (f"‼ вторая полоса в сессии ({lane}) — она открывается НОВОЙ сессией: "
-            "допиши хендофф до «здесь и сейчас» и позови "
-            "~/.claude/scripts/hand.sh <каталог> [файл] (derflow/SKILL.md)")
+            f"допиши хендофф до «здесь и сейчас» и позови "
+            f"{hand} <каталог> [файл] (derflow/SKILL.md)")
 
 
 def claim(latch):
@@ -219,7 +287,9 @@ def main_tool():
     # Дешёвая сторона вперёд: когда обе защёлки стоят, транскрипт не читается.
     if not (need_loud or need_lane2):
         return 0
-    lines = tail_lines(payload.get("transcript_path") or "")
+    zcode = is_zcode()
+    loud = LOUD_Z if zcode else LOUD
+    lines = tail_lines(zcode_transcript(session) or payload.get("transcript_path") or "")
 
     out = []
     # Событие вперёд уровня: смена полосы — это ПЕРЕХОД, и он адресный,
@@ -231,13 +301,13 @@ def main_tool():
         # исключением по букве D, а Dx вторым анонсом — $309 за сессию.
         head = re.split(r"[\s\u00b7(,]", seen[1], maxsplit=1)[0] if len(seen) >= 2 else ""
         if len(seen) >= 2 and head not in STAY and claim(lane2_latch):
-            out.append(lane2_msg(seen[1]))
+            out.append(lane2_msg(seen[1], zcode))
     if need_loud:
         n = context_from(lines)
-        if n and n >= LOUD and claim(loud_latch):
-            out.append(f"ctx: {n / 1000:.0f}k {loud_msg()}")
+        if n and n >= loud and claim(loud_latch):
+            out.append(f"ctx: {n / 1000:.0f}k {loud_msg(zcode)}")
     if out:
-        print("\n".join(out))
+        emit("\n".join(out))
     return 0
 
 
@@ -246,17 +316,19 @@ def main():
         payload = json.load(sys.stdin)
     except (ValueError, OSError):
         return 0
-    n = last_context(payload.get("transcript_path") or "")
-    branch = current_branch(payload.get("cwd"))
+    zcode = is_zcode()
     session = payload.get("session_id")
+    warn, loud = (WARN_Z, LOUD_Z) if zcode else (WARN, LOUD)
+    n = last_context(zcode_transcript(session) or payload.get("transcript_path") or "")
+    branch = current_branch(payload.get("cwd"))
 
     out = []
     if n:
         msg = f"ctx: {n / 1000:.0f}k"
-        if n >= LOUD:
-            msg += " " + loud_msg()
-        elif n >= WARN:
-            msg += " ⚠ дальше каждый ход платит за этот контекст"
+        if n >= loud:
+            msg += " " + loud_msg(zcode)
+        elif n >= warn:
+            msg += warn_msg(zcode)
         out.append(msg)
 
     if session:
@@ -265,13 +337,13 @@ def main():
         if prev_branch and branch and prev_branch != branch:
             out.append(f"⚠ ветка: {prev_branch} → {branch} — другая проблема? "
                        "Тогда своя сессия (derflow/_parallel.md)")
-        if prev_ts and n and n >= WARN and time.time() - prev_ts >= PAUSE_SEC:
+        if prev_ts and n and n >= warn and time.time() - prev_ts >= PAUSE_SEC:
             out.append(f"↩ возврат через {ago(time.time() - prev_ts)} в контекст "
                        f"{n / 1000:.0f}k — новую задачу лучше в свою сессию")
         write_state(path, branch, first_turn=prev_ts is None)
 
     if out:
-        print("\n".join(out))
+        emit("\n".join(out))
     return 0
 
 
