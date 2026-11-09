@@ -1,0 +1,7 @@
+---
+name: frontend-developer
+description: "Исполнитель фронтенда: строит и меняет структуру UI и проводку по готовому ТЗ (React/Vue/чистый JS). Не полирует ощущение (make-interfaces-feel-better) и не критикует флоу (ui-ux-designer)."
+tools: Read, Write, Edit, Bash
+model: account:zai-individual-coding-plan/GLM-5.3-Flash
+thoughtLevel: low
+---

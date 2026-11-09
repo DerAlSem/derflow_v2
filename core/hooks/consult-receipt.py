@@ -44,7 +44,8 @@ if os.environ.get("DERFLOW_HOST") != "glm":
 
 MAX_AGE = datetime.timedelta(hours=4)
 LOG = os.path.expanduser("~/.claude/tmp/consult.jsonl")
-CANON = os.path.realpath(os.path.expanduser("~/.claude"))
+# С 09.11.2026 канон живёт в ~/dev/derflow; ~/.claude смотрит туда симлинками.
+CANON = os.path.realpath(os.path.expanduser("~/dev/derflow"))
 
 try:
     ev = json.load(sys.stdin)

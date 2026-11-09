@@ -22,6 +22,8 @@ fi
 
 which_profile() {
   local url
+  # С 09.11.2026 у v2 нет своего .git: канон в ~/dev/derflow, профиль смотрит туда симлинками.
+  case "$(readlink "$1/skills/derflow" 2>/dev/null)" in */dev/derflow/*) echo v2; return ;; esac
   url="$(git -C "$1" remote get-url origin 2>/dev/null || true)"
   case "$url" in *derflow_v2*) echo v2 ;; *) echo v1 ;; esac
 }

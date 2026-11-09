@@ -10,25 +10,28 @@
 /*
 
 !/.gitignore
-!/CLAUDE.md
 !/README.md
 !/V2.md
 !/ОТЛОЖКА.md
-!/settings.json
-!/agents/
+!/CLAUDE.md
+!/install.sh
+!/core/
+!/hosts/
 !/skills/
-!/schemas/
-!/hooks/
-!/scripts/
+!/tools/
 !/specs/
 !/waiting/
 !/plans/
+!/backlog/
+
+# С 09.11.2026 репо живёт в ~/dev/derflow, а не в ~/.claude: секретов рядом
+# больше нет, но белый список оставлен — derflow_v2 публичный, и случайный
+# файл в корне не должен уехать молча.
 
 # Байткод. `/hooks/` и `/scripts/` впущены КАТАЛОГАМИ, а не файлами, поэтому
 # белый список тут не защищает: `__pycache__` уехал бы в историю вместе с ними
 # при первом же `git add hooks/`. Проверено `git check-ignore` — правила не было.
-/hooks/__pycache__/
-/scripts/__pycache__/
+__pycache__/
 
 # settings.local.json НЕ версионируется. По конвенции Claude Code *.local.json —
 # машинно-локальный файл. В нём копятся разрешения, привязанные к путям и

@@ -1,0 +1,6 @@
+---
+name: gap-finder
+description: Use when a spec, mock, design, or freshly-built feature is drafted and you want to surface what is MISSING — omissions, unhandled cases, unknown-unknowns, survivorship bias — rather than judge what is already there. Triggers on "what am I missing", "did I forget anything", completeness check before finalizing a spec/feature/mock, and after implementing something that touches user-facing flows or data.
+tools: Read, Bash
+thoughtLevel: high
+---
