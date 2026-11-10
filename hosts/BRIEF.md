@@ -63,7 +63,11 @@ install.sh       сборка + симлинки во все среды; --check
   `github.com/MoonshotAI/kimi-code`) и отдельно поставленный Kimi Code CLI
   2.5.2 (`~/.kimi-code/bin/kimi`, инсталлер `code.kimi.com/kimi-code/install.sh`).
   Обе подключены: `hosts/kimi-work/` и `hosts/kimi-code/`, блоки 5–6 в
-  `install.sh`. Отличия сред: десктопу daimon собирает индекс скиллов сам и
+  `install.sh`. Форк для патчей — `DerAlSem/kimi-code` (клон
+  `~/dev/kimi-code`, ветка `derflow-hand`, патч KIMI_TUI_PROMPT; живой
+  `~/.kimi-code/bin/kimi` — её сборка, авто-апдейт выключен:
+  `~/.kimi-code/tui.toml` → `auto_install = false`; детали — doc-1
+  `backlog/docs/capabilities/kimi-code-fork/`). Отличия сред: десктопу daimon собирает индекс скиллов сам и
   симлинки-каталоги НЕ видит → `rsync`-копии `derflow`/`docflow` в
   `daimon/skills/`; ядро CLI по симлинкам ходит (скиллы, `agents/`,
   `AGENTS.md` — проверено живыми прогонами `kimi -p`). Хуки только у CLI
