@@ -3,11 +3,11 @@ id: doc-1
 title: kimi-code форк
 type: guide
 created_date: '2026-11-09T12:32:00Z'
-updated_date: '2026-11-09T12:33:00Z'
+updated_date: '2026-11-10T11:50:00Z'
 ---
 # kimi-code форк
 
-Как устроена кастомизация Kimi Code CLI под derflow. Разведка — DF-4 (09.11.2026), вердикт — decision-1. Клон: `~/dev/kimi-code` (github.com/MoonshotAI/kimi-code, MIT, main, версия 2.5.2, монорепо pnpm).
+Как устроена кастомизация Kimi Code CLI под derflow. Разведка — DF-4 (09.11.2026), вердикт — decision-1. Клон: `~/dev/kimi-code` (github.com/MoonshotAI/kimi-code, MIT, main, версия 2.5.2, монорепо pnpm). Первый патч (env `KIMI_TUI_PROMPT`) реализован 10.11.2026 (DF-5): ветка `derflow-hand`, живой бинарь подменён сборкой из неё.
 
 ### Requirement: Рабочее окружение клона
 
@@ -31,11 +31,13 @@ updated_date: '2026-11-09T12:33:00Z'
 
 #### Scenario: проверка сборки
 
-КОГДА бинарь собран ТОГДА `dist-native/bin/<target>/kimi --version` печатает версию пакета, а `pnpm test:native:smoke` (`scripts/native/smoke.mjs`) гоняет exec-server handshake и ssh-askpass без сети. Оба прошли на сборке из main.
+КОГДА бинарь собран ТОГДА `dist-native/bin/<target>/kimi --version` печатает версию пакета, а `pnpm test:native:smoke` (`scripts/native/smoke.mjs`) гоняет exec-server handshake и ssh-askpass без сети. Прошли на сборке из main (09.11) и на сборке с патчем `derflow-hand` (10.11).
 
 #### Scenario: подмена живого CLI
 
 КОГДА подменяют `~/.kimi-code/bin/kimi` своей сборкой ТОГДА копируют поверх собранный бинарь И обязательно ставят `KIMI_CODE_NO_AUTO_UPDATE=1` в окружение/конфиг запуска: иначе staged-обновление (`src/cli/update/native-swap.ts`) молча вернёт апстримный бинарь при очередном апдейте. `kimi upgrade` под патчем не запускают — после каждого апстрим-ребейза бинарь пересобирают и подменяют заново.
+
+СОСТОЯНИЕ 10.11.2026: живой бинарь — сборка из ветки `derflow-hand` (cmp идентичен `dist-native/bin/darwin-arm64/kimi`); апстримный 2.5.2 сохранён рядом в `~/.kimi-code/bin/kimi.bak-2.5.2` (чистка native-swap трогает только `<exe>.bak` и `<exe>.<pid>.bak` — наше имя вне её досягаемости). Подмена — rename-first (`mv` живого в бэкап, затем `cp`): запущенные сессии продолжают на старом образе, overwrite бинаря под работающим процессом не нужен. Экспорт `KIMI_CODE_NO_AUTO_UPDATE=1` стоит в лончере `hosts/kimi-code/scripts/hand.sh`. Для РУЧНЫХ запусков вне hand.sh: переменную — в shell-окружение, либо выключить автоустановку в `~/.kimi-code/tui.toml` (`[upgrade] autoInstall = false`) — native-swap проверяет и её (`shouldAutoInstallUpdates`, `src/cli/update/preflight.ts:558`), это закрывает все запуски разом; решение за владельцем.
 
 ### Requirement: Точки патча TUI
 
@@ -47,7 +49,7 @@ updated_date: '2026-11-09T12:33:00Z'
 
 #### Scenario: стартовый промпт интерактива (патч KIMI_TUI_PROMPT)
 
-КОГДА hand.sh расщепляет сессию ТОГДА сейчас работает костыль: сеялка `kimi -p "<хендофф>"` (одноходовая, разрешения спросить не у кого) + `exec kimi -c` (интерактив стартует пустым и ждёт кика). В CLI нет способа посеять промпт в интерактив: `-p/--prompt` — только headless (конфликтует с --yolo/--auto/--plan), позиционных аргументов нет, из env существуют только дебаг-переменные вроде KIMI_TUI_INPUT_LATENCY. Патч: env `KIMI_TUI_PROMPT` (в стиле имён апстрима), читается в конце `KimiTUI.finishStartup()` (`src/tui/kimi-tui.ts`, ~строки 1128-1172) после старта подписки сессии; непустое значение уходит в публичный шов `this.handleUserInput(text)` (kimi-tui.ts:1550 — тот же путь, что и ввод пользователя: история, slash-диспатч, очередь). hand.sh тогда сводится к одному шагу: `KIMI_TUI_PROMPT="$(cat хендофф)" exec kimi` в новом табе — сессия сама начинает работу, разрешения спрашиваются в живом интерактиве. Аналог `--open-workspace-prompt` для десктопа не нужен: десктоп kimi — отдельный репо (code-app), здесь не патчится.
+КОГДА hand.sh расщепляет сессию ТОГДА новый таб стартует одним шагом: `KIMI_TUI_PROMPT="<имя> — прочитай <хендофф> … продолжай"` + `exec kimi` — сессия сама начинает работу по хендоффу, разрешения спрашиваются в живом интерактиве (реализовано 10.11.2026, DF-5; костыль «сеялка `kimi -p` + `exec kimi -c`» и кик-ритуал сняты). Штатного способа посеять промпт в интерактив в CLI нет (замер 09.11.2026, kimi 2.5.2 --help): `-p/--prompt` — только headless (конфликтует с --yolo/--auto/--plan), позиционных аргументов нет, из env существовали только дебаг-переменные вроде KIMI_TUI_INPUT_LATENCY — поэтому патч. Патч: env `KIMI_TUI_PROMPT` (в стиле имён апстрима), читается в конце `KimiTUI.finishStartup()` (`src/tui/kimi-tui.ts`) после старта подписки сессии; непустое значение уходит в публичный шов `this.handleUserInput(text)` — тот же путь, что и ввод пользователя: история, slash-диспатч, очередь, ленивое создание сессии. Проверено без сборки: `pnpm dev:cli` под pty с `KIMI_TUI_PROMPT="скажи ок"` — ход начался без ввода, ответ «ок» получен. Автотитул: TUI затирает OSC-заголовок таба автотитулом из первого сообщения (замер 09.11), поэтому лончер hand.sh переписывает заголовок повторно (2–40 с). Аналог `--open-workspace-prompt` для десктопа не нужен: десктоп kimi — отдельный репо (code-app), здесь не патчится.
 
 ### Requirement: Модель сопровождения форка
 

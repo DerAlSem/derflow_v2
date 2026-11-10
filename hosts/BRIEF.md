@@ -70,8 +70,9 @@ install.sh       сборка + симлинки во все среды; --check
   (`~/.kimi-code/config.toml`, секции `[[hooks]]`; эталон —
   `hosts/kimi-code/config.toml`, ключи туда не коммитим); у десктопа оба
   `config.toml` генерирует daimon — ручная секция не живёт. Расщепление:
-  CLI — `~/.kimi-code/scripts/hand.sh` (сеялка `kimi -p` + интерактив
-  `kimi -c`); у десктопа hand.sh нет — `kimi-daimon run --prompt`
+  CLI — `~/.kimi-code/scripts/hand.sh` (посев `KIMI_TUI_PROMPT` в один
+  шаг, живой бинарь — локальная сборка с патчем derflow-hand, клон
+  `~/dev/kimi-code`); у десктопа hand.sh нет — `kimi-daimon run --prompt`
   конфликтует с живым приложением за `runner.lock`, путь — одноразовая
   local_conversation-автоматизация или ручная новая сессия.
   `~/dev/kimi` — рабочая папка с задачами, а не конфиг.
