@@ -133,6 +133,15 @@ try {
   step = `загрузка ${opts.url}`;
   await page.goto(opts.url, { waitUntil: 'load', timeout: opts.timeout });
 
+  // SPA: `load` — это DOM, но не гидрация: клик по кнопке до того, как фреймворк
+  // навесил обработчики, проходит БЕЗ ошибки и БЕЗ эффекта (боевое: конструктор
+  // GM-601.2, два прогона кликов «−» вхолостую). Тихая сеть + пауза дают бандлу
+  // исполниться; кликов нет — пауза ничего не портит, кадр и так после networkidle.
+  if (opts.clicks.length) {
+    await page.waitForLoadState('networkidle', { timeout: Math.min(opts.timeout, 5000) }).catch(() => {});
+    await page.waitForTimeout(800);
+  }
+
   for (const text of opts.clicks) {
     step = `клик «${text}»`;
     // Сначала роль кнопки/ссылки с таким именем, иначе любой видимый элемент с текстом.
