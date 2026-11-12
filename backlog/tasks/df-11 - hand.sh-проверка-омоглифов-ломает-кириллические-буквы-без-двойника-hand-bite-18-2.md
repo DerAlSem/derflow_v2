@@ -3,9 +3,11 @@ id: DF-11
 title: >-
   hand.sh: проверка омоглифов ломает кириллические буквы без двойника (hand-bite
   18/2)
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@kimi'
 created_date: '2026-11-12T19:00:00Z'
+updated_date: '2026-11-12T19:06:00Z'
 labels:
   - hand
   - стенд
