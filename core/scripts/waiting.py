@@ -107,6 +107,19 @@ def die(code, msg):
     sys.exit(code)
 
 
+def _read_keep_eol(path):
+    # newline="" обязателен (см. set_fields), а Path.read_text(newline=) есть
+    # только с 3.13 — у сред бывает 3.12 (замер 12.11.2026, DF-10: стенд
+    # waiting-bite падал 54×TypeError под python 3.12.16).
+    with open(path, "r", encoding="utf-8", newline="") as f:
+        return f.read()
+
+
+def _write_keep_eol(path, text):
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        f.write(text)
+
+
 def git(*args, cwd=None):
     # Отсутствие самого git — не «git ответил ошибкой», а «спросить некого»:
     # subprocess бросает FileNotFoundError ДО всякого кода возврата.
@@ -1264,7 +1277,7 @@ def install_hook():
     двигаться.
     """
     try:
-        raw = SETTINGS.read_text(encoding="utf-8", newline="")
+        raw = _read_keep_eol(SETTINGS)
     except OSError as e:
         die(2, f"настройки не читаются — {e}")
     if HOOK_MARK in raw:
@@ -1289,7 +1302,7 @@ def install_hook():
     at = hits[0] + 1
     lines[at:at] = HOOK_BLOCK.rstrip("\n").split("\n")
     tmp = SETTINGS.with_name(f"{SETTINGS.name}.{os.getpid()}.tmp")   # pid: файл правят 4–6 сессий
-    tmp.write_text(eol.join(lines), encoding="utf-8", newline="")
+    _write_keep_eol(tmp, eol.join(lines))
     os.replace(tmp, SETTINGS)
     print(f"запись хука вставлена в {SETTINGS} — по якорю, чужие ключи не тронуты")
     print("Проверить: новая сессия, и дельта обязана прийти в её контекст.")
@@ -1429,7 +1442,7 @@ def set_fields(path, pairs):
     # newline="" обязателен: без него текстовый режим транслирует \r\n в \n ещё
     # до нас, и любая проверка «а был ли CRLF» отвечает «не было» ВСЕГДА. Своя
     # починка без этого была бы пустой — поймано укусом, а не чтением кода.
-    raw = path.read_text(encoding="utf-8", newline="")
+    raw = _read_keep_eol(path)
     # Окончание строк СОХРАНЯЕТСЯ. Иначе файл с CRLF после любой машинной правки
     # переписывался бы в LF целиком, и диффом это выглядело бы как «изменены все
     # строки» — правка по ключу перестала бы отличаться от перезаписи, то есть
@@ -1470,7 +1483,7 @@ def set_fields(path, pairs):
     # install_hook. Писатели здесь — команды, которые зовёт человек, поэтому окно
     # уже; но класс тот же, а цена промаха выше: это файл ЧЕЛОВЕКА, а не кэш.
     tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
-    tmp.write_text(eol.join(lines) + eol, encoding="utf-8", newline="")
+    _write_keep_eol(tmp, eol.join(lines) + eol)
     os.replace(tmp, path)
 
 
