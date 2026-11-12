@@ -218,6 +218,56 @@ kimi_bin="$HOME/.kimi-code/bin/kimi"
 # Посев читает хендофф и СРАЗУ продолжает работу: интерактиву хватает одного
 # сообщения, разрешения он спросит сам, вживую. Путь хендоффа — АБСОЛЮТНЫЙ:
 # надёжен при любом cwd преемника.
+# Имя ОДНО на хендофф, а расщеплять по нему можно сколько угодно раз — табы
+# получались неотличимы (боевое 12.11.2026, три окна одного имени; починено в
+# версии для Claude, здесь перенесено). Занятое имя получает « 2», « 3»…
+# Занятость — два источника: заголовки табов Ghostty (имя здесь едет OSC-ом, в
+# `ps` его нет) и резерв-каталоги на две минуты: второй вызов подряд приходит
+# раньше, чем заголовок первого таба выставлен. Резерв атомарен (mkdir).
+# Заголовок совпадает с именем целиком либо оканчивается « имя» (перед ним
+# может стоять значок статуса) — подстрока не годится: «X» входит в «X 2».
+# Ghostty не запущен — опрашивать нечего (и будить его незачем).
+gh_titles=""
+if pgrep -xi ghostty >/dev/null 2>&1; then
+  gh_titles="$(osascript 2>/dev/null <<'AS' || true
+tell application "Ghostty"
+  set out to ""
+  repeat with w in windows
+    repeat with t in tabs of w
+      set out to out & (name of t) & linefeed
+    end repeat
+  end repeat
+  return out
+end tell
+AS
+)"
+fi
+name_taken() {
+  local line
+  while IFS= read -r line; do
+    [ "$line" = "$1" ] && return 0
+    case "$line" in *" $1") return 0 ;; esac
+  done <<EOF
+$gh_titles
+EOF
+  return 1
+}
+claims="${TMPDIR:-/tmp}/derflow-hand/names"
+mkdir -p "$claims"
+find "$claims" -mindepth 1 -maxdepth 1 -mmin +2 -exec rmdir {} + 2>/dev/null || true
+base_sess="$sess"
+n=1
+while :; do
+  cand="$base_sess"; [ "$n" -gt 1 ] && cand="$base_sess $n"
+  key="$(printf '%s' "$cand" | md5 -q)"
+  if ! name_taken "$cand"; then
+    if [ "$dry" = 1 ]; then sess="$cand"; break; fi
+    if mkdir "$claims/$key" 2>/dev/null; then sess="$cand"; break; fi
+  fi
+  n=$((n + 1))
+done
+[ "$sess" != "$base_sess" ] && echo "ℹ️  имя «${base_sess}» занято — таб назван «${sess}»" >&2
+
 seed="${sess} — прочитай ${hand}: там всё состояние и порядок шагов. Продолжай работу по ним сразу, не переспрашивая."
 
 echo "каталог: $dir"
