@@ -1,9 +1,11 @@
 ---
 id: DF-1
 title: 'Свип канона: «~/.claude как репозиторий» → ~/dev/derflow'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@kimi'
 created_date: '2026-11-09T07:42:00Z'
+updated_date: '2026-11-12T18:42:00Z'
 labels: []
 dependencies: []
 ordinal: 1000

@@ -136,8 +136,9 @@ W="${WAITING:-$HOME/.claude/scripts/waiting.py}"
 ROOT="$(mktemp -d)"; trap 'rm -rf "$ROOT" 2>/dev/null || true' EXIT
 export WAITING_HOME="$ROOT/home"     # ящик, кэш и корни — НЕ в живой ~/.claude
 mkdir -p "$WAITING_HOME" "$ROOT/repos"
-# ~/.claude в жизни — репозиторий git, и стенд обязан воспроизводить это, иначе
-# особый случай «ящик дома» проверяется не на том, на чём он живёт.
+# Канон переехал в ~/dev/derflow (12.11.2026, DF-1): ~/.claude больше не
+# репозиторий. git init оставлен: «ящик дома» обязан работать и на границе
+# репозитория (waiting.py: «у ящика дома каталога .git может не быть»).
 git -C "$WAITING_HOME" init -q -b main .
 git -C "$WAITING_HOME" config user.email t@t
 git -C "$WAITING_HOME" config user.name t
