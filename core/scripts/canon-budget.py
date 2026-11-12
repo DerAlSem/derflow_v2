@@ -10,8 +10,12 @@ import json, os, re, sys
 
 D = os.environ.get("CANON_BUDGET_DIR") or os.path.expanduser(
     "~/.claude/skills/derflow")   # переопределяется ради стенда, как CANON_DRIFT_SKILLDIR
+# Индекс авто-памяти Claude Code ключуется по cwd сессии (DF-3, 12.11.2026:
+# записи о владельце переехали в канон core/AGENTS.md — сторож смотрит память
+# ТЕКУЩЕГО проекта, а не замороженный старый ключ ~/.claude).
+_mem_key = re.sub(r"[^A-Za-z0-9]", "-", os.getcwd())
 MEM = os.path.expanduser(
-    "~/.claude/projects/-Users-deralsem--claude/memory/MEMORY.md")
+    f"~/.claude/projects/{_mem_key}/memory/MEMORY.md")
 BUDGET = {"_lane-c.md": 120, "_gates.md": 100, "_capture.md": 120,
           "_ship.md": 80, "_parallel.md": 80}
 MEM_BUDGET = 16 * 1024
