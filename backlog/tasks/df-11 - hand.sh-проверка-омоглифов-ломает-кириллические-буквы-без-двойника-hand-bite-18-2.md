@@ -3,11 +3,11 @@ id: DF-11
 title: >-
   hand.sh: проверка омоглифов ломает кириллические буквы без двойника (hand-bite
   18/2)
-status: In Progress
+status: Done
 assignee:
   - '@kimi'
 created_date: '2026-11-12T19:00:00Z'
-updated_date: '2026-11-12T19:06:00Z'
+updated_date: '2026-11-12T19:08:00Z'
 labels:
   - hand
   - стенд
@@ -23,6 +23,12 @@ ordinal: 11000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 hand-bite.sh зелёный целиком
-- [ ] #2 kimi-версия hand.sh проверена на «Л·лото» и «Т·раскатка»
+- [x] #1 hand-bite.sh зелёный целиком
+- [x] #2 kimi-версия hand.sh проверена на «Л·лото» и «Т·раскатка»
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Корень один: форма-гейт '^[[:alpha:]]·' под наследованной LC_COLLATE=C не признавал кириллицу — оба провала (и «Т·раскатка» без слова «неотличим», и отказ «Л·лото») были его срабатыванием до омоглиф-гейта. Починка: LC_ALL=en_US.UTF-8 на этот grep в обеих версиях hand.sh. Проверки: hand-bite 20/0; kimi-версия прогнана руками dry-run — «Л·лото» проезжает, «Т·раскатка» отклонена с «неотличима».
+<!-- SECTION:FINAL_SUMMARY:END -->
