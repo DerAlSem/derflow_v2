@@ -64,3 +64,9 @@ timeout = 5
 event = "PostToolUse"
 command = "$HOME/.claude/hooks/context-meter.py --tool"
 timeout = 5
+
+[[hooks]]
+event = "PostToolUse"
+matcher = "Write|Edit|MultiEdit|NotebookEdit"
+command = "$HOME/.claude/hooks/handoff-header.py"
+timeout = 5
