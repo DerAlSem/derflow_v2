@@ -56,6 +56,13 @@ Active development includes:
 - Writing tests alongside implementation
 - Ensuring accessibility from the start
 
+**Modern web platform — до кода, не после.** Перед написанием HTML/CSS/клиентского JS
+(диалоги, формы, тёмная тема, анимации, раскладка, доступность) вызови скилл
+`modern-web-guidance`: `search` → `retrieve` → сверка с гайдом, и в конце ответа секция
+`### Modern Web Guidance`. Не вызывай для бэкенда, инфры и тулинга. Команды — только с
+префиксом из скилла (версия закреплена, `DISABLE_TELEMETRY=1`): без него текст запроса
+уходит в Google, а проектных имён в запросе быть не должно.
+
 Status updates during work:
 ```json
 {
