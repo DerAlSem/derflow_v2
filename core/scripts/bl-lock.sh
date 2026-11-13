@@ -39,6 +39,13 @@ case "${1:-who}" in
       echo "branch: $branch"
       echo "tree: $(git rev-parse --show-toplevel)"
       echo "since: $(date +%s)"
+      # Нативная ZCode-сессия замка (RFC agent-sessions v2 §3.1, DK-11):
+      # пустая/отсутствующая переменная — строки session: нет, старые
+      # замки без поля остаются валидными. Единственный источник —
+      # ZCODE_SESSION_ID, ничего больше не читается.
+      if [ -n "${ZCODE_SESSION_ID:-}" ]; then
+        echo "session: $ZCODE_SESSION_ID"
+      fi
     } > "$locks/$id/owner"
     backlog task edit "$id" -s "In Progress" -a "@$who" --plain \
       | head -3
@@ -55,7 +62,9 @@ case "${1:-who}" in
       echo "$id · $w · $b · $(age "$t")"
       n=$((n + 1))
     done
-    [ "$n" -eq 0 ] && echo "замков нет"
+    # if-форма: [ ... ] && echo при n>0 возвращала 1 — who с замками
+    # выходил кодом 1 под set -e
+    if [ "$n" -eq 0 ]; then echo "замков нет"; fi
     ;;
   drop)
     id="${2:?нужен ID задачи}"
