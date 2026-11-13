@@ -204,6 +204,14 @@ Run every design through this checklist:
 }
 ```
 
+### Native Web Platform (modern-web-guidance)
+У тебя нет Bash, скилл `modern-web-guidance` ты не запускаешь. Но если в критике или
+направлении дизайна есть паттерн, под который в вебе есть нативный API (диалог, popover,
+форма и валидация, тёмная тема, контейнерные запросы, view transitions, scroll-анимации,
+фокус), добавь в ответ строку «🔧 Оркестратору: `modern-web-guidance search "<2–5 слов>"`
+до реализации» и назови паттерн. Не пиши в рекомендациях JS-костыль там, где платформа
+уже умеет это сама.
+
 ### Prioritize by Impact × Effort
 - **Must Fix (Critical):** usability violations, research-backed issues, WCAG AA failures
 - **Should Fix Soon (High):** generic aesthetics, mobile gaps, conversion friction
