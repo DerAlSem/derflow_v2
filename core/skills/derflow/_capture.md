@@ -49,7 +49,7 @@
 - Имя продолжения НОСИТ НОМЕР ЗАДАЧИ: `<буква>·<N>.<k>-<задача>`, N — задача бэклога, k — счётчик продолжений (601 → 601.1 → 601.2).
   «Продолжение …» словами — НЕ имя: сгенерированный титул затирает канон (замер 02.11.2026, constructor-settings-live).
 - Карта букв живёт ЗДЕСЬ (копия в скрипте разъедется молча): `G` gmb_v2, `M` mprz.ru, `P` propevay, `T` cpvs-tbank, `C` `~/dev/derflow`,
-  `Л` muzloto, `V` turbo01, `R` rk_bot, `K` cybenematic-site, `Q` sms-gate, `Б` payment-providers, `A` agent-bench, `Z` ~/dev/ZCode, `E` mail-system, `D` derstats, `S` romantsova.store, `F` dervless, `W` docflow-kanban, `O` tg-pa.
+  `Л` muzloto, `V` turbo01, `R` rk_bot, `K` cybenematic-site, `Q` sms-gate, `Б` payment-providers, `A` agent-bench, `Z` ~/dev/ZCode, `E` mail-system, `D` derstats, `S` romantsova.store, `F` dervless, `W` docflow-kanban, `O` tg-pa, `H` ~/dev/dahua.
   Проекта нет в карте — заведи свободную букву тут же, занятую не переиспользуй.
 - Число о межсессионном состоянии пишется с БАЗОЙ сравнения (`git rev-list --count <база>..main`), а не счётом: счёт лжив уже к записи.
 - «Сплит» сказан — исполняешь ты: обнови хендофф до «здесь и сейчас» → `~/.claude/scripts/hand.sh <каталог> [файл]` → отчёт строкой и молчи.
