@@ -15,8 +15,7 @@
 #   UserPromptSubmit, PreToolUse/PostToolUse (matcher — имя инструмента),
 #   Stop, SubagentStop, Notification, PreCompact и др.
 #
-# Набор — адаптация hosts/claude/settings.json. glm-blind опущен: он про
-# слепоту GLM к скринам, модели kimi изображения читают.
+# Набор — адаптация hosts/claude/settings.json.
 # ⚠️ Совместимость скриптов с payload kimi проверена частично: waiting.py,
 # canon-budget.py, stale-root.py stdin почти не читают; context-meter.py и
 # canon-drift.py знают контракты Claude/ZCode и под kimi могут молчать или

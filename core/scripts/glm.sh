@@ -9,8 +9,9 @@
 # живут здесь родными, портировать нечего (решение владельца 04.10.2026).
 #
 # Ловушки, увиденные на первом прогоне:
-#   • `glm-5.3` Claude Code не знает — окно контекста он подставляет 200k по
-#     умолчанию; счётчик ctx и порог расщепления верны, только если у GLM так же.
+#   • `glm-5.4` Claude Code не знает — окно контекста он подставляет 200k по
+#     умолчанию; окно задано явно (CLAUDE_CODE_MAX_CONTEXT_TOKENS ниже), иначе
+#     счётчик ctx и порог расщепления верны, только если у GLM окно и правда 200k.
 #   • Классификатор авто-режима тоже идёт в z.ai: решает, что пускать без
 #     вопроса, GLM. Для ВДС и прода это не страховка.
 #   • Коннекторы claude.ai при внешнем токене выключены (Claude Docs и пр.).
@@ -40,13 +41,18 @@ export ANTHROPIC_AUTH_TOKEN="$key"
 unset ANTHROPIC_API_KEY
 # Алиасы моделей агентов (`model: sonnet` у исполнителей) тоже уходят в GLM:
 # внутри этой сессии других моделей нет, Anthropic — только через consult.sh.
-export ANTHROPIC_MODEL="glm-5.3"
-export ANTHROPIC_DEFAULT_OPUS_MODEL="glm-5.3"
-export ANTHROPIC_DEFAULT_SONNET_MODEL="glm-5.3"
-export ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-5.3-flash"
-# Окно glm-5.3 — 1M (со слов владельца 05.10.2026; список моделей z.ai размеров
-# не отдаёт). Без этой строки Claude Code не знает модель, держит 200k и
-# предупреждает на каждом старте. Порог расщепления derflow от окна не зависит.
+# Все уровни на одной модели, HAIKU тоже (решение владельца 23.11.2026): разделения
+# «flash / не flash» больше нет, glm-5.4 картинки читает сам.
+export ANTHROPIC_MODEL="glm-5.4"
+export ANTHROPIC_DEFAULT_OPUS_MODEL="glm-5.4"
+export ANTHROPIC_DEFAULT_SONNET_MODEL="glm-5.4"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-5.4"
+# Окно glm-5.4 без суффикса — не меньше 717k: вход 717 014 токенов принят (замер
+# 23.11.2026, api.z.ai/api/anthropic/v1/messages; список моделей z.ai размеров
+# не отдаёт). Верх не измерялся, 1M — по доке z.ai; суффикс `[1m]` из той же доки
+# сервер не знает (1211 Unknown Model) — не ставить. Без следующей строки Claude
+# Code не знает модель, держит 200k и предупреждает на каждом старте. Порог
+# расщепления derflow от окна не зависит.
 export CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000
 # Auto mode: серверные классифайер-проверки через api.z.ai не доезжают (шлюз
 # режет поля), и диалог «session isn't eligible» держит первое проверяемое

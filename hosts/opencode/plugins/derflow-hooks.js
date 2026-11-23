@@ -83,10 +83,9 @@ const NOWAKE = "<!-- derflow:nowake -->"
 // возвращала следующим промптом — бой 07.10 показал: ход с картинкой ЦЕЛИКОМ
 // делал flash (включая работу), возврат не наступал, маркер терялся при
 // рестарте службы. Теперь внешние глаза: prompt-хук описывает картинку прямым
-// API (сестра-канон ручного перегляда — ~/.claude/scripts/see.sh), описание
-// дописывается в текст промпта, модель сессии не трогается вовсе. Flash'у уходит
-// ТОЛЬКО нейтральная транскрипция — вопрос пользователя не передаётся, иначе
-// работу начнёт строить flash.
+// API, описание дописывается в текст промпта, модель сессии не трогается вовсе.
+// Flash'у уходит ТОЛЬКО нейтральная транскрипция — вопрос пользователя не
+// передаётся, иначе работу начнёт строить flash.
 const VISION_MODEL = "glm-5.3-flash"
 const VISION_URL = "https://api.z.ai/api/coding/paas/v4/chat/completions"
 const VISION_PROMPT =
@@ -111,7 +110,7 @@ const isOtherMedia = (uri) =>
   /^data:(video|audio|application\/pdf)/i.test(uri ?? "") ||
   /\.(pdf|mp4|mov|webm|mkv|avi|mp3|wav|m4a|ogg)([?#]|$)/i.test(uri ?? "")
 
-// Ключ z.ai: env, затем опенкод-конфиг (как see.sh). В лог не печатается никогда.
+// Ключ z.ai: env, затем опенкод-конфиг. В лог не печатается никогда.
 const zaiKey = async () => {
   if (process.env.ZAI_API_KEY) return process.env.ZAI_API_KEY
   try {
@@ -123,8 +122,7 @@ const zaiKey = async () => {
 }
 
 // Картинка из промпта → стабильный файл в VISION_DIR (хеш содержимого: повторная
-// вставка не плодит копий; мёртвый путь /tmp после перезагрузки виден в заголовке
-// описания — see.sh на него отвечает внятно).
+// вставка не плодит копий; путь файла попадает в заголовок описания).
 const materializeImage = async (uri) => {
   try {
     let bytes, mime
@@ -186,7 +184,7 @@ const describeImage = async (img, apiKey, deadline) => {
     if (!text) throw new Error("пустой ответ flash")
     return `${header}\n${text}`
   } catch (e) {
-    return `${header}\n[НЕ распознано: ${String(e?.message ?? e)} — скажи владельцу, что картинку не видел, или прогони see.sh по пути из заголовка]`
+    return `${header}\n[НЕ распознано: ${String(e?.message ?? e)} — скажи владельцу, что картинку не видел]`
   }
 }
 
