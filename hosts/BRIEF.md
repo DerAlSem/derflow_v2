@@ -29,7 +29,9 @@ install.sh       сборка + симлинки во все среды; --check
 ```
 
 Живые каталоги сред — **симлинки в чекаут `~/dev/derflow`**. Правка канона
-действует сразу, правка слота или шапки агента — после `./install.sh`.
+действует сразу, правка слота или шапки агента — после `./install.sh`; шапку
+агента ztui при этом читает только новая сессия (замер 23.11.2026: живая
+осталась на старой модели и в новом ходе).
 
 ## 2. Как подключены среды сейчас
 
@@ -37,7 +39,7 @@ install.sh       сборка + симлинки во все среды; --check
 |---|---|---|---|
 | входной файл | `~/.claude/CLAUDE.md` → `hosts/claude/generated/CLAUDE.md` | `~/.zcode/AGENTS.md` → `hosts/zcode/generated/AGENTS.md` | `~/.config/opencode/AGENTS.md` → `hosts/opencode/AGENTS.md` (свой, не из слотов) |
 | скиллы | `~/.claude/skills/<x>` → `core/skills/<x>`, `skills/<x>` | `~/.zcode/skills/<x>` → то же | — |
-| агенты | `~/.claude/agents` → `core/agents` | `~/.zcode/agents/<x>.md` → `hosts/zcode/generated/agents/` (шапки: модель GLM-5.3-Flash, `thoughtLevel`, урезанные `tools`) | — |
+| агенты | `~/.claude/agents` → `core/agents` | `~/.zcode/agents/<x>.md` → `hosts/zcode/generated/agents/` (шапки: модель исполнителей GLM-5.4, `thoughtLevel`, урезанные `tools`) | — |
 | хуки | `~/.claude/settings.json` (реальный файл, не симлинк) → `~/.claude/hooks/*`, `~/.claude/scripts/*` | `~/.zcode/cli/config.json` (НЕ под install.sh) → те же `~/.claude/hooks/*` + `~/.zcode/hooks/tariff-meter.py` | плагин `plugins/derflow-hooks.js` вызывает `~/.claude/hooks/*`, `~/.claude/scripts/*` |
 | расщепление сессии | `~/.claude/scripts/hand.sh` | `~/.zcode/scripts/hand.sh` → `hosts/zcode/scripts/hand.sh` | `scripts/hand.sh` |
 
