@@ -7,10 +7,14 @@ status: In Progress
 assignee:
   - '@bites-own-file'
 created_date: '2026-11-24T19:17:50Z'
-updated_date: '2026-11-24T19:17:52Z'
+updated_date: '2026-11-24T19:25:44Z'
 labels:
   - стенд
 dependencies: []
+documentation:
+  - >-
+    backlog/docs/capabilities/doc-7 -
+    Стенды-укуса-ctxmeter-hand-memo-toolcarry-—-испытываемый-файл-и-среда-запуска.md
 type: bug
 ordinal: 24000
 ---
