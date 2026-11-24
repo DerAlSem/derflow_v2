@@ -26,6 +26,14 @@ RED-стенда от 29.10 (`git worktree`), `stands/red-out*` — его вы�
 **Публичный репо** (`derflow_v2`): в `hosts/` ни ключей, ни хостов — скрипты
 читают ключи из конфигов сред при запуске.
 
+**Девять скиллов Claude Sync в ZCode выключены владельцем нарочно** — его
+решение 24.11.2026: morning, xlsx, pdf, import-memory, docs, skill-creator,
+pptx, google-workspace, docx в `~/.zcode/skills` не лежат, и `install.sh` их не
+раскладывает. Ссылки на них не восстанавливать, на текущий бакет не переводить
+и в `install.sh` не добавлять: это не поломка. Включает только владелец —
+руками, по своей прямой просьбе. Для Claude Code скиллы живы в
+`~/.claude/skills/synced/<бакет>/`, их не трогать. Как устроено — doc-4.
+
 
 <!-- BACKLOG.MD GUIDELINES START -->
 <!-- backlog.md-instructions-version: 1.55.3 -->
