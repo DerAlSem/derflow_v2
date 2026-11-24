@@ -34,10 +34,15 @@ want() { [ -z "$ONLY" ] || [ "$ONLY" = "$1" ]; }
 
 BACKUP="$HOME/backups/derflow-install-$(date +%Y%m%d-%H%M%S)"
 drift=0
+# Каталоги, куда link() кладёт симлинки. В --check по ним ищутся висячие (п. 7).
+# Список не пишется руками: ручной отстал бы так же, как отстал сам link().
+link_dirs=()
 
 # link <цель в репо> <живой путь>
 link() {
-  local target="$1" live="$2"
+  local target="$1" live="$2" dir
+  dir="$(dirname "$live")"
+  case " ${link_dirs[*]-} " in *" $dir "*) ;; *) link_dirs+=("$dir") ;; esac
   [ -e "$target" ] || { echo "❌ нет цели $target" >&2; exit 3; }
   if [ -L "$live" ] && [ "$(readlink "$live")" = "$target" ]; then
     return 0
@@ -187,6 +192,35 @@ if want kimi-work && [ -d "$KIMI_WORK_DIR/skills" ]; then
     cp "$REPO/hosts/kimi-work/generated/AGENTS.md" "$kw_agents"
     echo "📋 $kw_agents ← hosts/kimi-work/generated/AGENTS.md (копия)"
   fi
+fi
+
+# 7. Висячие симлинки на исчезнувшее из репо (DF-16). link() идёт по целям,
+# которые в репо ЕСТЬ, поэтому симлинк на удалённый файл не встречает никто:
+# 23.11.2026 трижды за день --check отвечал «дрейфа нет» рядом с мёртвой
+# ссылкой. Наш — цель под $REPO: чужие висячие (Claude Sync, debug/latest)
+# иначе были бы вечным дрейфом. Только отчёт: снимает человек, командой из
+# вывода — отдельной строкой, чтобы копировалась целиком.
+rm_path() {  # rm_path <живой путь> → аргумент команды rm: ~ вместо $HOME
+  local p="$1"
+  case "$p" in "$HOME"/*) p="~/${p#"$HOME"/}" ;; esac
+  case "$p" in
+    *[![:alnum:]_./~-]*) printf '%q' "${p/#\~/$HOME}" ;;  # пробел и прочее — экранировано
+    *) printf '%s' "$p" ;;
+  esac
+}
+if [ "$CHECK" = 1 ]; then
+  # `${a[@]+…}`: пустой массив под set -u в bash 3.2 — unbound variable
+  for dir in ${link_dirs[@]+"${link_dirs[@]}"}; do
+    [ -d "$dir" ] && [ ! -L "$dir" ] || continue
+    for live in "$dir"/*; do
+      [ -L "$live" ] && [ ! -e "$live" ] || continue
+      target="$(readlink "$live")"
+      case "$target" in "$REPO"/*) ;; *) continue ;; esac
+      echo "⚠️  $live → $target (цели в репо нет; снять — команда ниже)"
+      echo "    rm $(rm_path "$live")"
+      drift=1
+    done
+  done
 fi
 
 if [ "$CHECK" = 1 ]; then
