@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@waiting-bite-env'
 created_date: '2026-11-24T14:06:18Z'
-updated_date: '2026-11-24T14:15:32Z'
+updated_date: '2026-11-24T14:29:41Z'
 labels:
   - waiting
   - стенд
@@ -58,3 +58,16 @@ ordinal: 23000
 6. Влитие как в DF-19: под замком задачи, `main` = `origin/main`, `git merge --ff-only waiting-bite-env`, пуш `"${SHA}:refs/heads/main"`, сверка `git log <sha>..origin/main` пуст. В корне живьём: голый прогон из ztui.
 7. Дока — к состоянию после правки; `backlog instructions task-finalization`, `--check-ac` по каждому, `--final-summary`, `bl-done.sh`; закрывающий коммит вторым ff; жатва: `git worktree remove`, `git branch -d`.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+24.11.2026, ворктри waiting-bite-env (ветка waiting-bite-env), коммиты 2a0863d (заведена, doc-6 до правки) и 0703235 (стенд).
+Правка — только core/scripts/waiting-bite.sh (+85 −9): `HERE` (cd -P по $0) и `W="${WAITING:-$HERE/waiting.py}"`; первая строка прогона `испытываемый файл: <путь> — рядом со стендом|по WAITING=`; обёртка `wp()` с `env -u ZCODE_PROJECT_DIR -u ZCODE_SESSION_ID` — через неё `wt()`, гонка восьми new, два list с подменённым WAITING_HOME, new с подменённым HOME; та же приставка у python-обёртки таймера `wake_ms`; usage в шапке. Три укуса: файл рядом со стендом (спаян с «строку завёл этот файл»), ZCODE_PROJECT_DIR подложен перед wt — порядок по каталогу вызова, ZCODE_SESSION_ID подложен — вывод plain. Блок «ЗАМЕРЫ ИММУНИТЕТА К СРЕДЕ» в шапке. waiting.py не тронут.
+База до правки на 9e0dc73: голый из ztui ✅ 220 ❌ 3, под env -u ✅ 223 ❌ 0 — сошлось с расчётом хендоффа.
+Из ворктри после правки: голый из ztui ✅ 226 ❌ 0; env -u ✅ 226 ❌ 0; заглушка (print + exit 0) через WAITING= ✅ 0 ❌ 226.
+WAITING=<сломанная копия, unacked всегда True>: новый стенд ✅ 222 ❌ 4, прежний стенд с env -u ✅ 219 ❌ 4 — множества красных совпадают (те же четыре укуса).
+Файл waiting.py ВО ВОРКТРИ сломан, без WAITING=: новый стенд из ворктри ✅ 222 ❌ 4 (те же четыре); прежний стенд из ворктри ✅ 223 ❌ 0 — дефект в чистом виде; корень в тот же момент ✅ 223 ❌ 0. Файл ворктри восстановлен побайтно.
+Мутации стенда (копии в /tmp, дерево не трогали): снята нейтрализация в wp() — чистый шелл ✅ 224 ❌ 2 (ровно два укуса про ZCODE_*), голый из ztui ✅ 221 ❌ 5 (плюс три укуса порядка); возвращён W=$HOME/.claude/scripts/waiting.py — ✅ 225 ❌ 1 (ровно укус про файл рядом).
+Уточнения к хендоффу: JSON-контракт wake и порядок по ZCODE_PROJECT_DIR уже покрыты check-hook-emit.py:136 — новый укус про продукт не заводился; вывод стенда никто не разбирает (упоминания только в комментариях), первая строка никого не ломает. repo_box() возвращает ящик любому git-репозиторию без .claude/waiting — фикстура укуса про ZCODE_PROJECT_DIR настоящий репозиторий, как и наследуемое в бою значение.
+<!-- SECTION:NOTES:END -->
