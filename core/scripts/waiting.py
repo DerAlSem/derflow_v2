@@ -77,9 +77,6 @@ STALE_UNREACHABLE_S = 86400      # «недостижима дольше сут�
 # либо стучится в живой mprz.
 SSH = os.environ.get("WAITING_SSH") or "ssh"
 SETTINGS = HOME / "settings.json"
-TOMB = HOME / "ОТЛОЖКА.md"       # выведенный из обращения реестр-предшественник
-TOMB_MAX_LINES = 25              # редирект занимает шесть строк, остальное — запас
-TOMB_ANCHOR = "waiting.py list"
 HOOK_ANCHOR = '"hooks": {'       # единственная строка верхнего уровня
 HOOK_MARK = "waiting.py wake"    # по чему узнаём свою запись
 # Матчер — Р3: `compact` не включён (длинная сессия платила бы за дельту
@@ -1200,35 +1197,6 @@ def cmd_wake(a):
         sys.stderr = saved
 
 
-def tomb_state():
-    """Надгробие не растёт. Возвращает (текст, ok) по образцу hook_state().
-
-    Дописку в конец выведенного файла предотвратить НЕЛЬЗЯ: сессия, помнящая
-    ОТЛОЖКА.md по своему стартовому контексту, допишет туда молча и уедет — её
-    правило лежит в CLAUDE.md, а он грузится один раз на старте. Предотвратить
-    нельзя, увидеть можно, и это вся задача сторожа.
-
-    Четыре состояния, и три из них — поломка. Зелёное одно: файл на месте,
-    редирект в нём, длина в пределах потолка.
-    """
-    try:
-        lines = TOMB.read_text(encoding="utf-8").splitlines()
-    except FileNotFoundError:
-        # Не «всё хорошо»: редирект и есть то единственное, чем останавливаются
-        # живые сессии. Сессия, не нашедшая файла, заведёт отложку заново.
-        return ("надгробие ПРОПАЛО: ОТЛОЖКА.md удалён — сессия, не нашедшая "
-                "файла, заведёт отложку заново с чистого листа", False)
-    except OSError as e:
-        return (f"надгробие не прочиталось — {e}", False)
-    if TOMB_ANCHOR not in "\n".join(lines):
-        return (f"надгробие НЕ ПОСТАВЛЕНО: в ОТЛОЖКА.md нет «{TOMB_ANCHOR}» — "
-                f"файл всё ещё источник правды", False)
-    if len(lines) > TOMB_MAX_LINES:
-        return (f"надгробие ВЫРОСЛО: {len(lines)} строк при потолке "
-                f"{TOMB_MAX_LINES} — кто-то дописал в выведенный файл", False)
-    return (f"надгробие цело: {len(lines)} строк, редирект на месте", True)
-
-
 def hook_state():
     """Жива ли запись хука. Возвращает (текст, здорово ли).
 
@@ -1324,9 +1292,6 @@ def cmd_doctor(a):
     now = time.time()
     bad = 0
     text, ok = hook_state()
-    print(("✅ " if ok else "🔴 ") + text)
-    bad += 0 if ok else 1
-    text, ok = tomb_state()
     print(("✅ " if ok else "🔴 ") + text)
     bad += 0 if ok else 1
     broken = registry_broken(now, any(probeable(r) for r in scan()))
