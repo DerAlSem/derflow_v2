@@ -265,11 +265,17 @@ printf 'ветка: main\nимя: C·единственный\n' > "$D/handoff/�
 git -C "$D" add -A; git -C "$D" commit -qm h
 chk 0 "один хендофф на стволе — проезжает" "handoff/тема.md"
 
+# 🔴 Имя фикстуры — уникально на прогон (25.11.2026, DF-22). hand.sh на сухом пути
+# читает живую таблицу процессов (name_taken), и таб с именем «C·имена сессий»
+# ронял этот укус: ✅ 20 ❌ 1 в 3 прогонах из 3. Коллизию имён hand.sh разводит
+# нарочно, поэтому чинен стенд: суффикс — хвост каталога mktemp. Остальные имена
+# фикстур не трогать: их иголки — подстроки, суффикс их не ломает.
 D="$(mk gr5 feature/tab-name)"
 mkdir -p "$D/.claude/handoff"
-printf 'ветка: feature/tab-name\nимя: C·имена сессий\n' > "$D/.claude/handoff/tab-name.md"
+UN="C·имена-${ROOT##*.}"
+printf 'ветка: feature/tab-name\nимя: %s\n' "$UN" > "$D/.claude/handoff/tab-name.md"
 git -C "$D" add -A; git -C "$D" commit -qm h
-chk 0 "промпт НЕСЁТ имя — иначе автоимя сессии одинаково у всех" "промпт:  C·имена сессий — прочитай"
+chk 0 "промпт НЕСЁТ имя — иначе автоимя сессии одинаково у всех" "промпт:  $UN — прочитай"
 
 D="$(mk gr6 feature/tab-name2)"
 mkdir -p "$D/.claude/handoff"
