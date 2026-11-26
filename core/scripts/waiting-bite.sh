@@ -423,7 +423,17 @@ if [ "$self" = "${BASH_SOURCE[0]:-}" ] && [ -r "$self" ]; then
     # команды уровня: начавшееся в ней слово её гасит, возвращает только слово из списка;
     # cpw помнит, что слово началось в позиции, opt — что перед ним стояло time. Возврат из
     # подстановки гасит позицию: подстановка — часть слова.
-    function push() { L++; q[L] = ""; ansi[L] = 0; d[L] = 1; ar[L] = 0; cp[L] = 1; w[L] = ""; cpw[L] = 0; opt[L] = 0 }
+    # Фигурные скобки подстановки «${…}» — свой уровень, ps = 0 (DF-28, 26.11.2026): bash 3.2
+    # внутри них команду не разбирает, «<<» там часть слова, не открыватель heredoc, — а
+    # сканер вёл на `${a:-((1<<rc))}` ложный heredoc с тегом rc: вызов мимо был проглочен
+    # до строки rc. Уровень закрывает первая «}» вне кавычек СВОЕГО уровня: скобки bash
+    # не вкладывает (`${a:-{}<<rc}` — уже настоящий heredoc), «(» и «)» внутри не считаются
+    # (`${a:-(}` — валидно), кавычка открывается заново, под двойными тоже («${a:-"}"}»).
+    # Вложенные «$(» и арифметика — свои уровни, как прежде. Бэктик внутри скобок —
+    # команда (bt): до закрывающего бэктика маска снова единицы, heredoc в бэктиках
+    # настоящий (зонд: `${a:-`cat <<EOF … EOF`}`). u — читается ли команда: сама строка
+    # скрипта, «$(», бэктик в скобках; нули в маске — арифметика уровня либо не команда.
+    function push() { L++; q[L] = ""; ansi[L] = 0; d[L] = 1; ar[L] = 0; cp[L] = 1; w[L] = ""; cpw[L] = 0; opt[L] = 0; ps[L] = 1; bt[L] = 0 }
     function word(s) {                             # слово уровня кончилось; пустое — не слово
       if (s == "") return
       if (s == "time") { cp[L] = 1; opt[L] = 1 }
@@ -431,16 +441,17 @@ if [ "$self" = "${BASH_SOURCE[0]:-}" ] && [ -r "$self" ]; then
       else { cp[L] = (cpw[L] && (s == "then" || s == "else" || s == "elif" || s == "do" || s == "if" || s == "while" || s == "until" || s == "for" || s == "!")); opt[L] = 0 }
       w[L] = ""; cpw[L] = 0
     }
-    function cutcomment(s,    i, c, n, a) {
+    function cutcomment(s,    i, c, n, a, u) {
       n = length(s); m = ""; part = 0
       for (i = 1; i <= n; i++) {
-        c = substr(s, i, 1); a = ar[L]                 # a — арифметика уровня, где знак прочитан
+        c = substr(s, i, 1); a = ar[L]; u = (ps[L] || bt[L])   # a — арифметика уровня, где знак прочитан; u — читается команда
         if (part) { m = m "0"; part = 0; continue }       # второй знак пары: «\x» либо «(» из «$(»
         if (q[L] == "\"") {                               # внутри двойных кавычек
           m = m "0"
           if (c == "\\") part = 1
           else if (c == "\"") { q[L] = ""; cp[L] = 0 }
           else if (c == "$" && substr(s, i + 1, 1) == "(") { push(); part = 1; ar[L] = (substr(s, i + 2, 1) == "(") }
+          else if (c == "$" && substr(s, i + 1, 1) == "{") { push(); part = 1; ps[L] = 0 }
           continue
         }
         if (q[L] == sq) {                                 # внутри одинарных: всё буквально
@@ -452,6 +463,8 @@ if [ "$self" = "${BASH_SOURCE[0]:-}" ] && [ -r "$self" ]; then
         if (c == "\\") { part = 1; cp[L] = 0; cpw[L] = 0 }  # экранированный знак — не токен
         else if (c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[ \t]/)) return substr(s, 1, i - 1)
         else if (c == "$" && substr(s, i + 1, 1) == "(") { push(); part = 1; ar[L] = (substr(s, i + 2, 1) == "(") }
+        else if (c == "$" && substr(s, i + 1, 1) == "{") { push(); part = 1; ps[L] = 0 }
+        else if (c == "}" && L > 0 && !ps[L] && !bt[L]) { L--; cp[L] = 0 }
         else if (c == "\"" || c == sq) {
           q[L] = c; ansi[L] = (c == sq && substr(s, i - 1, 1) == "$"); cp[L] = 0; cpw[L] = 0
         }
@@ -459,17 +472,17 @@ if [ "$self" = "${BASH_SOURCE[0]:-}" ] && [ -r "$self" ]; then
           if (!a) word(w[L])                              # скобка кончает слово: после then, time, «!» — позиция команды
           if (cp[L] && !a && substr(s, i + 1, 1) == "(") { push(); part = 1; ar[L] = 1 }   # «((» в позиции команды
           else if (!a && substr(s, i - 1, 1) ~ /[<>]/) push()
-          else { if (!a) cp[L] = 1; if (L > 0) d[L]++ }
+          else { if (!a) cp[L] = 1; if (L > 0 && ps[L]) d[L]++ }
         }
         else if (c == ")") {
-          if (L > 0 && --d[L] == 0) { L--; cp[L] = 0 }    # возврат из подстановки: слово продолжается
+          if (L > 0 && ps[L] && --d[L] == 0) { L--; cp[L] = 0 }    # возврат из подстановки: слово продолжается
           else if (!a) { word(w[L]); cp[L] = 1 }           # после «)» образца case и «()» функции — позиция команды
         }
         else if (!a && c ~ /[;|&{]/) { word(w[L]); cp[L] = 1 }
-        else if (!a && c == "`") { word(w[L]); cp[L] = 1 }
+        else if (!a && c == "`") { word(w[L]); cp[L] = 1; if (!ps[L]) bt[L] = !bt[L] }
         else if (!a && c ~ /[ \t]/) word(w[L])
         else if (!a) { if (cp[L]) { cp[L] = 0; cpw[L] = 1 }; w[L] = w[L] c }
-        m = m (a ? "0" : "1")
+        m = m ((a || !u) ? "0" : "1")
       }
       return s
     }
@@ -491,7 +504,7 @@ if [ "$self" = "${BASH_SOURCE[0]:-}" ] && [ -r "$self" ]; then
       t = line; sub(/^\t+/, "", t)
       return t == substr(tag, 2)
     }
-    BEGIN { L = 0; qq = "\"\047"; sq = "\047"; openre = "^[" qq "]?[A-Za-z_][A-Za-z0-9_]*" }
+    BEGIN { L = 0; ps[0] = 1; qq = "\"\047"; sq = "\047"; openre = "^[" qq "]?[A-Za-z_][A-Za-z0-9_]*" }
     {
       if (hd) {                                   # тело heredoc: ждём строку-терминатор
         if (isterm($0, hdtag)) {
@@ -505,7 +518,7 @@ if [ "$self" = "${BASH_SOURCE[0]:-}" ] && [ -r "$self" ]; then
       if (length(m) != length(s)) print "маска не сошлась со строкой: строка " NR
       t = s; off = 0
       while (match(t, /<<-?/)) {                  # here-string: за «<<» идёт третий «<»
-        rest = substr(t, RSTART + RLENGTH)
+        rest = substr(t, RSTART + RLENGTH); p = off + RSTART + RLENGTH - 1   # p — сдвиг маски для rest: RSTART и RLENGTH ниже перезапишут match() и sub()
         if (substr(m, off + RSTART, 1) != "1") {  # «<<» внутри строки либо арифметики — не открыватель
           off += RSTART; t = substr(t, RSTART + 1); continue
         }
@@ -514,7 +527,7 @@ if [ "$self" = "${BASH_SOURCE[0]:-}" ] && [ -r "$self" ]; then
           tag = substr(rest, RSTART, RLENGTH); sub(/[^A-Za-z0-9_]/, "", tag)
           queue = queue (dash ? "-" : "") tag " "
         }
-        off += RSTART + RLENGTH - 1
+        off = p
         t = rest
       }
       if (queue != "") { hd = 1; hdtag = queue; sub(/ .*/, "", hdtag) }
