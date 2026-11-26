@@ -370,7 +370,23 @@ if [ "$self" = "${BASH_SOURCE[0]:-}" ] && [ -r "$self" ]; then
     # арифметики bash исполняет: вызов в них виден, как прежде. a — арифметика уровня,
     # в котором знак прочитан, а не строки: после возврата из вложенной подстановки
     # нули продолжаются.
-    function push() { L++; q[L] = ""; ansi[L] = 0; d[L] = 1; ar[L] = 0 }
+    # Арифметическая команда «((…))» — тот же уровень ar (DF-27, 26.11.2026): bash читает
+    # «((» как арифметику только там, где может начаться команда: в начале строки, после
+    # «; | & ( ) {» и бэктика, после слова then, else, elif, do, if, while, until, for, time
+    # или «!»; за time идут слова-опции (измерено на bash 3.2, 114 случаев). После прочего
+    # это синтаксическая ошибка, а скобки уровня 0 сканер не считал — и «<<» в «(( x=1<<rc ))»
+    # открывал ложный heredoc: вызов мимо не был назван, ложное зелёное тихое. cp — позиция
+    # команды уровня: начавшееся в ней слово её гасит, возвращает только слово из списка;
+    # cpw помнит, что слово началось в позиции, opt — что перед ним стояло time. Возврат из
+    # подстановки гасит позицию: подстановка — часть слова.
+    function push() { L++; q[L] = ""; ansi[L] = 0; d[L] = 1; ar[L] = 0; cp[L] = 1; w[L] = ""; cpw[L] = 0; opt[L] = 0 }
+    function word(s) {                             # слово уровня кончилось; пустое — не слово
+      if (s == "") return
+      if (s == "time") { cp[L] = 1; opt[L] = 1 }
+      else if (opt[L] && substr(s, 1, 1) == "-") cp[L] = 1
+      else { cp[L] = (cpw[L] && (s == "then" || s == "else" || s == "elif" || s == "do" || s == "if" || s == "while" || s == "until" || s == "for" || s == "!")); opt[L] = 0 }
+      w[L] = ""; cpw[L] = 0
+    }
     function cutcomment(s,    i, c, n, a) {
       n = length(s); m = ""; part = 0
       for (i = 1; i <= n; i++) {
@@ -379,25 +395,36 @@ if [ "$self" = "${BASH_SOURCE[0]:-}" ] && [ -r "$self" ]; then
         if (q[L] == "\"") {                               # внутри двойных кавычек
           m = m "0"
           if (c == "\\") part = 1
-          else if (c == "\"") q[L] = ""
+          else if (c == "\"") { q[L] = ""; cp[L] = 0 }
           else if (c == "$" && substr(s, i + 1, 1) == "(") { push(); part = 1; ar[L] = (substr(s, i + 2, 1) == "(") }
           continue
         }
         if (q[L] == sq) {                                 # внутри одинарных: всё буквально
           m = m "0"
           if (c == "\\" && ansi[L]) part = 1
-          else if (c == sq) { q[L] = ""; ansi[L] = 0 }
+          else if (c == sq) { q[L] = ""; ansi[L] = 0; cp[L] = 0 }
           continue
         }
-        if (c == "\\") part = 1                           # экранированный знак — не токен
+        if (c == "\\") { part = 1; cp[L] = 0; cpw[L] = 0 }  # экранированный знак — не токен
         else if (c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[ \t]/)) return substr(s, 1, i - 1)
         else if (c == "$" && substr(s, i + 1, 1) == "(") { push(); part = 1; ar[L] = (substr(s, i + 2, 1) == "(") }
         else if (c == "\"" || c == sq) {
-          q[L] = c; ansi[L] = (c == sq && substr(s, i - 1, 1) == "$")
+          q[L] = c; ansi[L] = (c == sq && substr(s, i - 1, 1) == "$"); cp[L] = 0; cpw[L] = 0
         }
-        else if (c == "(" && substr(s, i - 1, 1) ~ /[<>]/) push()
-        else if (c == "(" && L > 0) d[L]++
-        else if (c == ")" && L > 0 && --d[L] == 0) L--
+        else if (c == "(") {
+          if (!a) word(w[L])                              # скобка кончает слово: после then, time, «!» — позиция команды
+          if (cp[L] && !a && substr(s, i + 1, 1) == "(") { push(); part = 1; ar[L] = 1 }   # «((» в позиции команды
+          else if (!a && substr(s, i - 1, 1) ~ /[<>]/) push()
+          else { if (!a) cp[L] = 1; if (L > 0) d[L]++ }
+        }
+        else if (c == ")") {
+          if (L > 0 && --d[L] == 0) { L--; cp[L] = 0 }    # возврат из подстановки: слово продолжается
+          else if (!a) { word(w[L]); cp[L] = 1 }           # после «)» образца case и «()» функции — позиция команды
+        }
+        else if (!a && c ~ /[;|&{]/) { word(w[L]); cp[L] = 1 }
+        else if (!a && c == "`") { word(w[L]); cp[L] = 1 }
+        else if (!a && c ~ /[ \t]/) word(w[L])
+        else if (!a) { if (cp[L]) { cp[L] = 0; cpw[L] = 1 }; w[L] = w[L] c }
         m = m (a ? "0" : "1")
       }
       return s
@@ -429,6 +456,7 @@ if [ "$self" = "${BASH_SOURCE[0]:-}" ] && [ -r "$self" ]; then
         }
         next
       }
+      if (q[L] == "") { cp[L] = 1; w[L] = ""; cpw[L] = 0; opt[L] = 0 }   # начало строки — позиция команды
       s = cutcomment($0)
       if (length(m) != length(s)) print "маска не сошлась со строкой: строка " NR
       t = s; off = 0
