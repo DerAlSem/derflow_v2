@@ -1,11 +1,11 @@
 ---
 id: DF-30
 title: 'install.sh: управление регистрацией zcode-хуков (~/.zcode/cli/config.json)'
-status: In Progress
+status: Done
 assignee:
   - '@wb-df30'
 created_date: '2026-11-27T18:48:41Z'
-updated_date: '2026-11-27T20:22:32Z'
+updated_date: '2026-11-27T20:30:52Z'
 labels:
   - хук
 dependencies: []
@@ -85,6 +85,8 @@ ordinal: 32000
 27.11.2026, 23:30 МСК. Приземление и бой (та же сессия). Rebase ветки на main (`03af7d9`) прошёл без конфликтов, ff в корень: main = wb-df30 = `aa96b83`, пуш `03af7d9..aa96b83`, `git log aa96b83..origin/main` пуст. Стенды из корня: `zcode-hooks-bite.sh` настоящий ✅ 25 ❌ 0, заглушка ✅ 0 ❌ 25; `install-bite.sh` ✅ 16 ❌ 0. Стенд на копии живого файла (`--only zcode --zcode-dir <стенд>`): install вышел нулём с «равны — ничего не меняю», байты, mtime и режим копии прежние. Живой прогон в корне: `./install.sh` код 0 — «hooks в ~/.zcode/cli/config.json равны hosts/zcode/hooks.json — ничего не меняю», живой файл побайтно равен копии, снятой до прогона (3390 Б, 0600, mtime 27.11 14:05:45), копии и временного файла рядом нет; `./install.sh --check` — «✅ дрейфа нет», код 0. Боем: две сессии headless тем же бинарём, что и ztui (`dist/zcode.cjs -p`); в репозитории derflow в базе CLI (`part`, `metadata.source = hook_context`) лежат «SessionStart hook additional context» (дельта реестра) и «UserPromptSubmit hook additional context: #1 git: main · 0 uncommitted file(s) / #2 [ТАРИФ: …]». Вне репозитория строка git не печатается — `git-line.py` там молчит, это не хук.
 
 AC #10, «ворктри сжат»: жатва идёт последним вызовом сессии, после закрывающего коммита и второго ff — так велит порядок хендоффа: файл задачи править больше негде.
+
+27.11.2026, 23:25 МСК. Поправка времени: предыдущая заметка датирована 23:30 по глазам, а дела были раньше — пуш ветки в main в 23:19, сверка --check в корне в 23:18, боевая сессия в derflow в 2026-11-27 23:20:10 (reflog origin/main, mtime файла вывода, time_created строки part).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
