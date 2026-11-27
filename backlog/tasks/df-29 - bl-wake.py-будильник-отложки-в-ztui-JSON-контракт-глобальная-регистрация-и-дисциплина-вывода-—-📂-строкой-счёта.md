@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@wb-blwake'
 created_date: '2026-11-27T08:46:03Z'
-updated_date: '2026-11-27T08:46:45Z'
+updated_date: '2026-11-27T11:01:30Z'
 labels:
   - хук
 dependencies: []
@@ -45,3 +45,21 @@ ordinal: 31000
 - [ ] #9 docflow/SKILL.md и docflow/setup.md говорят про будильник в ztui по факту: проектный .claude/settings.json среда не читает, регистрация глобальная, 📂 — строкой счёта
 - [ ] #10 ./install.sh --check в корне после влития — дрейфа нет; ветка приземлена ff-only, ворктри сжат
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. bl-wake.py: emit() по ZCODE_SESSION_ID и show() — 🟢 и ⚪ по строке, 📂 строкой счёта, --overdue
+2. check-hook-emit.py — две пробы bl-wake
+3. Дока capability (doc-8)
+4. docflow/SKILL.md и docflow/setup.md — фразы по факту
+5. Влитие ff-only в main, повтор стенда из корня
+6. Запись в ~/.zcode/cli/config.json, проверка боем в gmb_v2
+7. Закрытие задачи, жатва ветки и ворктри
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+27.11.2026, 14:10 МСК. Пункты 1–3 сделаны: bl-wake.py правлен (3569ce7), стенд ✅ 19 ❌ 0 (до правки ✅ 9 ❌ 10), check-hook-emit.py — 11 из 11, дока doc-8. Ожидание стенда «копия без JSON краснеет ровно одним» опровергнуто замером (краснеет тремя: контракт ZCode и две спайки на нём), ожидание поправлено.
+<!-- SECTION:NOTES:END -->
