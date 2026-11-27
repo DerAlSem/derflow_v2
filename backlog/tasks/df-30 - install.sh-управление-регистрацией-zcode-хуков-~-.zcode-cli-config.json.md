@@ -3,9 +3,9 @@ id: DF-30
 title: 'install.sh: управление регистрацией zcode-хуков (~/.zcode/cli/config.json)'
 status: In Progress
 assignee:
-  - '@wb-waketails'
+  - '@wb-df30'
 created_date: '2026-11-27T18:48:41Z'
-updated_date: '2026-11-27T18:52:14Z'
+updated_date: '2026-11-27T19:05:03Z'
 labels:
   - хук
 dependencies: []
