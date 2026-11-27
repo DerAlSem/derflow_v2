@@ -3,9 +3,11 @@ id: DF-29
 title: >-
   bl-wake.py: будильник отложки в ztui (JSON-контракт, глобальная регистрация) и
   дисциплина вывода — 📂 строкой счёта
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@wb-blwake'
 created_date: '2026-11-27T08:46:03Z'
+updated_date: '2026-11-27T08:46:45Z'
 labels:
   - хук
 dependencies: []
