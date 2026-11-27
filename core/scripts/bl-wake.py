@@ -40,7 +40,9 @@ ZCode не довезёт.
 
 Регистрация: Claude Code — проектный .claude/settings.json (docflow/setup.md,
 шаг 5); ZCode проектный слой хуков не читает (zcode-cli 0.18.0) — запись
-глобальная, ~/.zcode/cli/config.json → hooks.events.SessionStart, руками.
+глобальная, ~/.zcode/cli/config.json → hooks.events.SessionStart; её держит
+./install.sh из ~/dev/derflow (эталон hosts/zcode/hooks.json, DF-30), руками
+файл не править.
 Вне docflow-репо (нет backlog/) хук молчит сам, потому глобальная запись
 безвредна. Стенд — bl-wake-bite.sh, обёртку держит check-hook-emit.py.
 

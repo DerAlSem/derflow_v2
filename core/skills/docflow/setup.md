@@ -15,8 +15,10 @@
    `python3 ~/.claude/scripts/bl-migrate.py --waiting .claude/waiting --global-waiting ~/.claude/waiting --entry <путь-репо>`
 5. В проектный `.claude/settings.json` → `hooks.SessionStart`:
    `python3 ~/.claude/scripts/bl-wake.py` (timeout 5). ztui проектный слой
-   хуков не читает: там та же команда ставится глобально и руками —
-   `~/.zcode/cli/config.json` → `hooks.events.SessionStart`.
+   хуков не читает: там та же команда стоит глобально —
+   `~/.zcode/cli/config.json` → `hooks.events.SessionStart`; её держит
+   `./install.sh` из `~/dev/derflow` (эталон `hosts/zcode/hooks.json`), руками
+   файл не править.
 6. В проектный `CLAUDE.md`: «Задачи этого репо ведутся через docflow;
    openspec выведен из обращения <дата>». Блок Backlog.md, который вписал
    `init`, оставь как есть.

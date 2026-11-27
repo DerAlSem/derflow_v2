@@ -14,7 +14,7 @@ The repo lives in `~/dev/derflow`, not inside `~/.claude`. One canon, several ho
 | `hosts/*/generated/` | built by `tools/build.py`; committed so a hand edit shows up as drift |
 | `skills/` | companion skills (ru-text, copywriting, explore-code, …) |
 
-`./install.sh` builds and symlinks everything into `~/.claude`, `~/.zcode` and `~/.config/opencode`; `./install.sh --check` reports drift — including symlinks left dangling by files since removed from the repo — and changes nothing. Canon edits take effect at once (hosts read this checkout); slot/agent-head edits after `./install.sh`. Claude Code's `settings.json` is not symlinked (Claude Code writes to it) — `hosts/claude/settings.json` is the reference, `--check` diffs it.
+`./install.sh` builds and symlinks everything into `~/.claude`, `~/.zcode` and `~/.config/opencode`; `./install.sh --check` reports drift — including symlinks left dangling by files since removed from the repo — and changes nothing. Canon edits take effect at once (hosts read this checkout); slot/agent-head edits after `./install.sh`. Claude Code's `settings.json` is not symlinked (Claude Code writes to it) — `hosts/claude/settings.json` is the reference, `--check` diffs it. ZCode's `~/.zcode/cli/config.json` is not symlinked either — `hosts/zcode/hooks.json` is the reference for derflow's hook entries: `./install.sh` brings only those entries to it (a text splice; every other byte stays), `--check` diffs them.
 
 ---
 

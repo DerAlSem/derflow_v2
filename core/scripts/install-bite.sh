@@ -45,6 +45,8 @@ H="$ROOT/home"                                 # живые каталоги —
 mkdir -p "$H/.claude" "$H/.zcode" "$H/.config/opencode" "$H/.kimi-code"   # линкуется лишь в существующие
 # settings.json не линкуется: без него сверка hooks падает ещё в install-режиме.
 cp "$IREPO/hosts/claude/settings.json" "$H/.claude/settings.json"
+# config.json ztui — то же (DF-30): без файла install откажет; эталон записей равен сам себе.
+mkdir -p "$H/.zcode/cli"; cp "$IREPO/hosts/zcode/hooks.json" "$H/.zcode/cli/config.json"
 before="$(git -C "$IREPO" status --porcelain 2>/dev/null)"
 pass=0; fail=0; out=""; rc=0
 G=ghostlink                                    # имя фикстур: файла с ним в репо нет и быть не должно

@@ -5,6 +5,7 @@
 #   ./install.sh                 # собрать hosts/*/generated и разложить симлинки
 #   ./install.sh --check         # ничего не менять: дрейф сборки и живых путей, код 1 при дрейфе
 #   ./install.sh --claude-dir D  # раскладывать claude-часть в D (стенд RED: CLAUDE_CONFIG_DIR)
+#   ./install.sh --zcode-dir D   # zcode-часть в D, записи хуков — в D/cli/config.json (стенд)
 #   ./install.sh --only claude   # одна среда: claude | zcode | opencode | kimi-code | kimi-work
 #
 # Правило: живой путь среды — симлинк в ЭТОТ чекаут. Реальный файл/каталог на
@@ -12,6 +13,9 @@
 # settings.json Claude Code НЕ линкуется: Claude Code сам пишет в него
 # (разрешения, /config), и запись по симлинку не гарантирована. Эталон —
 # hosts/claude/settings.json; --check показывает расхождение, правишь руками.
+# config.json ztui (~/.zcode/cli/config.json) тоже не линкуется: его пишет
+# целиком сам CLI. Эталон записей derflow — hosts/zcode/hooks.json: install
+# приводит к нему только эти записи, текстом; прочие байты не трогает.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,8 +28,9 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --check) CHECK=1 ;;
     --claude-dir) CLAUDE_DIR="$2"; shift ;;
+    --zcode-dir) ZCODE_DIR="$2"; shift ;;
     --only) ONLY="$2"; shift ;;
-    -h|--help) sed -n 2,13p "$0"; exit 0 ;;
+    -h|--help) sed -n '2,/^set -euo pipefail$/p' "$0" | sed '$d'; exit 0 ;;
     *) echo "❌ неизвестный аргумент: $1" >&2; exit 2 ;;
   esac
   shift
@@ -132,6 +137,13 @@ if want zcode && [ -d "$ZCODE_DIR" ]; then
   for f in "$REPO"/hosts/zcode/hooks/*; do
     link "$f" "$ZCODE_DIR/hooks/$(basename "$f")"
   done
+  # Записи derflow в config.json — эталон hosts/zcode/hooks.json. Файл живой
+  # для всех ztui-сессий и CLI пишет его целиком, поэтому не линкуется: его
+  # правят текстом и только в наших записях (core/scripts/zcode-hooks.py).
+  # --check сверяет разбором JSON и не пишет; отказ хелпера — ненулевой код.
+  zhooks=("$ZCODE_DIR/cli/config.json" "$REPO/hosts/zcode/hooks.json")
+  [ "$CHECK" = 1 ] && zhooks+=(--check)
+  python3 "${ZCODE_HOOKS:-$REPO/core/scripts/zcode-hooks.py}" "${zhooks[@]}" || drift=1
 fi
 
 # 4. opencode
@@ -225,4 +237,6 @@ fi
 
 if [ "$CHECK" = 1 ]; then
   [ "$drift" = 0 ] && echo "✅ дрейфа нет" || { echo "⚠️  дрейф найден"; exit 1; }
+elif [ "$drift" = 1 ]; then
+  echo "❌ install завершён с отказом — причина строкой выше"; exit 1
 fi

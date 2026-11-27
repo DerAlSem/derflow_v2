@@ -1,0 +1,117 @@
+{
+  "hooks": {
+    "enabled": true,
+    "events": {
+      "SessionStart": [
+        {
+          "matcher": "startup|resume|clear",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "python3 $HOME/.claude/scripts/waiting.py wake",
+              "timeout": 5
+            },
+            {
+              "type": "command",
+              "command": "python3 $HOME/.claude/scripts/canon-budget.py || true",
+              "timeout": 5
+            },
+            {
+              "type": "command",
+              "command": "python3 $HOME/.claude/scripts/stale-root.py || true",
+              "timeout": 5
+            },
+            {
+              "type": "command",
+              "command": "python3 $HOME/.claude/scripts/bl-wake.py",
+              "timeout": 5
+            }
+          ]
+        }
+      ],
+      "UserPromptSubmit": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "$HOME/.claude/hooks/git-line.py",
+              "timeout": 5
+            },
+            {
+              "type": "command",
+              "command": "$HOME/.claude/hooks/context-meter.py",
+              "timeout": 5
+            },
+            {
+              "type": "command",
+              "command": "$HOME/.claude/hooks/canon-drift.py",
+              "timeout": 5
+            },
+            {
+              "type": "command",
+              "command": "$HOME/.zcode/hooks/tariff-meter.py",
+              "timeout": 10
+            }
+          ]
+        }
+      ],
+      "PreToolUse": [
+        {
+          "matcher": "Edit|Write|ApplyPatch|Bash",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "python3 $HOME/.claude/hooks/main-tree-guard.py",
+              "timeout": 10,
+              "statusMessage": "Сторож основного чекаута"
+            }
+          ]
+        },
+        {
+          "matcher": "Skill|Bash|Task|Agent",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "$HOME/.claude/hooks/openspec-critique-gate.sh",
+              "timeout": 10,
+              "statusMessage": "Гейт критик-слоя"
+            }
+          ]
+        }
+      ],
+      "PostToolUse": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "$HOME/.claude/hooks/context-meter.py --tool",
+              "timeout": 5
+            }
+          ]
+        },
+        {
+          "matcher": "Write|Edit|MultiEdit|NotebookEdit|ApplyPatch",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "$HOME/.claude/hooks/handoff-header.py",
+              "timeout": 5,
+              "statusMessage": "Сторож шапки хендоффа"
+            }
+          ]
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "type": "command",
+              "command": "$HOME/.claude/hooks/openspec-reap-gate.sh",
+              "timeout": 10
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

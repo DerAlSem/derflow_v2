@@ -3,7 +3,7 @@ id: doc-8
 title: bl-wake.py — будильник отложки docflow
 type: other
 created_date: '2026-11-27T11:01:09Z'
-updated_date: '2026-11-27T12:13:57Z'
+updated_date: '2026-11-27T19:17:56Z'
 ---
 Как `core/scripts/bl-wake.py` будит сессию о созревшем в колонке Backlog и в какой среде его вывод доезжает до модели, — по факту кода (DF-29, 27.11.2026). Про блок пробы и статусы — `core/skills/docflow/SKILL.md`; правило укуса и таблица замеров — в шапке `bl-wake-bite.sh`.
 
@@ -70,7 +70,7 @@ Claude Code читает plain stdout хука. ZCode (zcode-cli 0.18.0-2) plain
 
 ### Requirement: регистрация по средам
 
-Claude Code — проектный `.claude/settings.json` → `hooks.SessionStart` → `python3 ~/.claude/scripts/bl-wake.py`, timeout 5 (`docflow/setup.md`, шаг 5). ZCode проектный слой хуков не читает: zcode-cli 0.18.0-2 берёт команды из `~/.zcode/cli/config.json` и плагинов, читателя `.claude/settings` в пакете нет. Запись для ZCode — глобальная, в `hooks.events.SessionStart` того же config.json, рядом с waiting wake, canon-budget и stale-root, в matcher `startup|resume|clear`; файл правится руками, `install.sh` его не собирает (`hosts/BRIEF.md`). Глобальная запись безвредна: вне docflow-репо хук молчит сам.
+Claude Code — проектный `.claude/settings.json` → `hooks.SessionStart` → `python3 ~/.claude/scripts/bl-wake.py`, timeout 5 (`docflow/setup.md`, шаг 5). ZCode проектный слой хуков не читает: zcode-cli 0.18.0-2 берёт команды из `~/.zcode/cli/config.json` и плагинов, читателя `.claude/settings` в пакете нет. Запись для ZCode — глобальная, в `hooks.events.SessionStart` того же config.json, рядом с waiting wake, canon-budget и stale-root, в matcher `startup|resume|clear`; запись держит `./install.sh` — эталон `hosts/zcode/hooks.json` (DF-30, doc-4), руками файл не править. Глобальная запись безвредна: вне docflow-репо хук молчит сам.
 
 Хук пускается shell-командой с `cwd = input.cwd || workingDirectory`, поэтому `$HOME` в команде раскрывается, а `git rev-parse` идёт от каталога сессии.
 

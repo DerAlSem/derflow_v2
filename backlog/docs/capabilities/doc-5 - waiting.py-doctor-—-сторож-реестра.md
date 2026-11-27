@@ -3,7 +3,7 @@ id: doc-5
 title: waiting.py doctor — сторож реестра
 type: other
 created_date: '2026-11-24T13:20:48Z'
-updated_date: '2026-11-24T13:31:38Z'
+updated_date: '2026-11-27T19:17:56Z'
 ---
 Как `waiting.py doctor` проверяет, жив ли механизм реестра, — по факту кода на
 24.11.2026 (DF-19). `doctor` — команда для человека, а не хук: своё отсутствие
@@ -20,7 +20,8 @@ updated_date: '2026-11-24T13:31:38Z'
 Строки «·» и замер TTL — сведения, в код возврата они вклада не кладут.
 
 Предел: `doctor` читает только `~/.claude/settings.json`. Запись того же хука в
-`~/.zcode/cli/config.json` он не проверяет.
+`~/.zcode/cli/config.json` он не проверяет — её сверяет `./install.sh --check`
+(doc-4).
 
 ### Requirement: `doctor` судит о записи хука разбором, а не поиском по тексту
 

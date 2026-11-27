@@ -40,7 +40,7 @@ install.sh       сборка + симлинки во все среды; --check
 | входной файл | `~/.claude/CLAUDE.md` → `hosts/claude/generated/CLAUDE.md` | `~/.zcode/AGENTS.md` → `hosts/zcode/generated/AGENTS.md` | `~/.config/opencode/AGENTS.md` → `hosts/opencode/AGENTS.md` (свой, не из слотов) |
 | скиллы | `~/.claude/skills/<x>` → `core/skills/<x>`, `skills/<x>` | `~/.zcode/skills/<x>` → то же | — |
 | агенты | `~/.claude/agents` → `core/agents` | `~/.zcode/agents/<x>.md` → `hosts/zcode/generated/agents/` (шапки: модель исполнителей GLM-5.4, `thoughtLevel`, урезанные `tools`) | — |
-| хуки | `~/.claude/settings.json` (реальный файл, не симлинк) → `~/.claude/hooks/*`, `~/.claude/scripts/*` | `~/.zcode/cli/config.json` (НЕ под install.sh) → те же `~/.claude/hooks/*` + `~/.zcode/hooks/tariff-meter.py` | плагин `plugins/derflow-hooks.js` вызывает `~/.claude/hooks/*`, `~/.claude/scripts/*` |
+| хуки | `~/.claude/settings.json` (реальный файл, не симлинк) → `~/.claude/hooks/*`, `~/.claude/scripts/*` | `~/.zcode/cli/config.json` (реальный файл; эталон записей — `hosts/zcode/hooks.json`, ведёт `./install.sh`) → те же `~/.claude/hooks/*` + `~/.zcode/hooks/tariff-meter.py` | плагин `plugins/derflow-hooks.js` вызывает `~/.claude/hooks/*`, `~/.claude/scripts/*` |
 | расщепление сессии | `~/.claude/scripts/hand.sh` | `~/.zcode/scripts/hand.sh` → `hosts/zcode/scripts/hand.sh` | `scripts/hand.sh` |
 
 `~/.claude/scripts`, `hooks`, `skills/*` — симлинки в `~/dev/derflow/core`.
@@ -100,6 +100,7 @@ install.sh       сборка + симлинки во все среды; --check
 
 - Канон (`core/`) не форкать под среду. Отличие среды — слот в `core/AGENTS.md` + файл в `hosts/<среда>/slots/`, или `.head` агента, или своя обвязка в `hosts/<среда>/`. Новая среда — новый `hosts/<имя>/` и блок в `install.sh`; новая среда с входным файлом из слотов — ещё строка в `HOSTS` у `tools/build.py`.
 - `hosts/*/generated/` и живые файлы (`~/.zcode/AGENTS.md` и т. п.) руками не править: после правки источника — `./install.sh`, потом `./install.sh --check` → «✅ дрейфа нет». Коммитить источник вместе с generated.
+- Хуки ZCode: новый или изменённый хук — сначала запись в `hosts/zcode/hooks.json`, потом `./install.sh`. Живой `~/.zcode/cli/config.json` руками не править: ручная запись derflow — дрейф, и следующий `./install.sh` её снимет или приведёт к эталону.
 - Репо публичный: никаких ключей, хостов и токенов. Скрипты читают ключи из конфигов среды при запуске (как `glm-usage.mjs` и `derflow-hooks.js`).
 - `~/dev/derflow` правят несколько сессий разом, а ворктри не изолирует: живые среды читают основной чекаут. Правка — read-modify-write по точному якорю, никогда перезапись файла целиком; `git status` до и после, коммит мелкий.
 - Задачи — через docflow (`backlog` CLI в `~/dev/derflow`), по ztui — `DF-2`.
