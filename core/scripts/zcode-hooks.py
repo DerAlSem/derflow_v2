@@ -37,7 +37,12 @@ USAGE = "использование: zcode-hooks.py <config.json> <hooks.json> [
 
 NONE = object()  # поля нет в объекте
 
-Slot = tuple["str | None", list[dict[str, Any]]]  # (matcher, записи)
+# schema.ts: events строго этих семь, слот — только matcher и hooks (минимум одна
+# запись); лишнее там CLI отвергает вместе со всем пользовательским файлом
+EVENTS = ("SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest",
+          "PostToolUse", "PostToolUseFailure", "Stop")
+
+Slot = tuple["str | None", list[dict[str, Any]], dict[str, Any]]  # (matcher, записи, сам слот)
 Model = dict[str, list[Slot]]  # событие -> слоты в порядке файла
 
 
@@ -69,6 +74,21 @@ def _pairs_strict(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 DEC = json.JSONDecoder()
 STRICT = json.JSONDecoder(object_pairs_hook=_pairs_strict)
+
+
+def _no_constant(name: str) -> Any:
+    raise ValueError(f"константа {name} — не JSON")
+
+
+DOC = json.JSONDecoder(parse_constant=_no_constant)
+
+
+def strict_decode(text: str, what: str) -> Any:
+    """Разбор всего текста так, как его читает CLI: NaN, Infinity и мусор в хвосте — отказ."""
+    try:
+        return DOC.decode(text)
+    except ValueError as e:
+        raise Refuse(f"{what} не разбирается как JSON — {e}") from e
 
 
 class Member(NamedTuple):
@@ -171,19 +191,31 @@ def to_model(hooks: Any, where: str, *, reference: bool = False) -> Model:
     for event, slots in events.items():
         if not isinstance(slots, list):
             raise Refuse(f"{where}: hooks.events.{event} — не список")
+        if reference and event not in EVENTS:
+            raise Refuse(f"{where}: событие {event} CLI не знает — такой ключ events "
+                         f"отвергает вместе со всем файлом")
         parsed: list[Slot] = []
         for slot in slots:
             if not isinstance(slot, dict) or not isinstance(slot.get("hooks"), list):
                 raise Refuse(f"{where}: слот события {event} не той формы")
+            if reference and (set(slot) - {"matcher", "hooks"} or not slot["hooks"]):
+                raise Refuse(f"{where}: слот события {event} эталона — только matcher и hooks,"
+                             f" записей не меньше одной: иначе CLI отвергает весь файл")
             matcher = slot.get("matcher")
             if matcher is not None and not isinstance(matcher, str):
                 raise Refuse(f"{where}: matcher слота события {event} — не строка")
+            if matcher == "":
+                matcher = None  # CLI читает пустую строку как «без matcher»
             records = slot["hooks"]
             if any(not isinstance(r, dict) for r in records):
                 raise Refuse(f"{where}: запись события {event} не той формы")
             if reference and any(not isinstance(r.get("command"), str) for r in records):
                 raise Refuse(f"{where}: запись события {event} без строкового command")
-            parsed.append((matcher, records))
+            if reference and any(r.get("type") not in ("command", "process")
+                                 or not is_derflow(r["command"]) for r in records):
+                raise Refuse(f"{where}: запись события {event} эталона — не команда derflow "
+                             f"(type command или process, скрипт из каталогов install.sh)")
+            parsed.append((matcher, records, slot))
         model[event] = parsed
     return model
 
@@ -196,7 +228,7 @@ class Rec(NamedTuple):
 
 def flatten(model: Model) -> Iterator[Rec]:
     for event, slots in model.items():
-        for matcher, records in slots:
+        for matcher, records, _ in slots:
             for record in records:
                 yield Rec(event, matcher, record)
 
@@ -205,13 +237,18 @@ def foreign(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [r for r in records if not is_derflow(r.get("command"))]
 
 
-def foreign_lists(model: Model) -> dict[str, list[dict[str, Any]]]:
-    """Чужие записи по событиям, в порядке файла (пустые события опущены)."""
-    out: dict[str, list[dict[str, Any]]] = {}
+def others(slot: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in slot.items() if k not in ("matcher", "hooks")}
+
+
+def foreign_shape(model: Model) -> dict[str, list[tuple[dict[str, Any], list[dict[str, Any]]]]]:
+    """Чужое по событиям: (прочие ключи слота, чужие записи) слотов с чужими записями,
+    в порядке файла."""
+    out: dict[str, list[tuple[dict[str, Any], list[dict[str, Any]]]]] = {}
     for event, slots in model.items():
-        rest = foreign([r for _, recs in slots for r in recs])
-        if rest:
-            out[event] = rest
+        rows = [(others(slot), foreign(records)) for _, records, slot in slots]
+        if any(rest for _, rest in rows):
+            out[event] = [row for row in rows if row[1]]
     return out
 
 
@@ -279,31 +316,32 @@ def analyze(refm: Model, filem: Model) -> tuple[list[str], list[str]]:
     return lines, edits
 
 
-def _slot(matcher: str | None, records: list[dict[str, Any]]) -> dict[str, Any]:
-    return {"hooks": records} if matcher is None else {"matcher": matcher, "hooks": records}
-
-
 def build(refm: Model, base: dict[str, Any], filem: Model) -> dict[str, Any]:
-    """Новый объект hooks: слоты эталона в его порядке, чужие записи при своих matcher.
+    """Новый объект hooks: порядок событий и слотов — файла, записи derflow — эталона.
 
-    base — прежний hooks файла (его прочие ключи, включая enabled, как были);
-    когда ключа не было — эталон целиком.
+    Записи эталона встают в первый слот файла с тем же matcher, вперёд чужих
+    записей этого слота; слоты эталона, которых в файле нет, — в конец события,
+    новые события — в конец events. Слот файла берётся как есть, из чужого слота
+    уходят только записи derflow; без записей слот снимается — пустым он ломает
+    файл для CLI. base — прежний hooks файла (его прочие ключи, включая enabled,
+    как были); когда ключа не было — эталон целиком.
     """
     events: dict[str, list[dict[str, Any]]] = {}
-    for event, slots in refm.items():
-        rest: dict[str | None, list[dict[str, Any]]] = {}
-        for matcher, records in filem.get(event, []):
-            rest.setdefault(matcher, []).extend(foreign(records))
-        out = [_slot(m, list(recs) + rest.pop(m, [])) for m, recs in slots]
-        out += [_slot(m, recs) for m, recs in rest.items() if recs]
-        events[event] = out
-    for event, fslots in filem.items():
-        if event not in refm:
-            rest: dict[str | None, list[dict[str, Any]]] = {}
-            for matcher, records in fslots:
-                rest.setdefault(matcher, []).extend(foreign(records))
-            if any(rest.values()):
-                events[event] = [_slot(m, recs) for m, recs in rest.items()]
+    for event in list(filem) + [e for e in refm if e not in filem]:
+        left = dict(enumerate(refm.get(event, [])))  # слоты эталона, ещё не занятые
+        out: list[dict[str, Any]] = []
+        for matcher, records, slot in filem.get(event, []):
+            rest = foreign(records)
+            hit = next((i for i, (m, _, _) in left.items() if m == matcher), None)
+            if hit is None:
+                if rest:
+                    out.append({**slot, "hooks": rest})
+                continue
+            ref_records = left.pop(hit)[1]
+            out.append({**slot, "hooks": ref_records + rest})
+        out += [slot for _, _, slot in left.values()]
+        if out:
+            events[event] = out
     new: dict[str, Any] = {}
     for key, val in base.items():
         new[key] = events if key == "events" else val
@@ -351,11 +389,12 @@ def splice(text: str, members: list[Member], close: int, opened: int,
 
 
 def check_post(text: str, new_text: str, old_head: str, old_tail: str, new_hooks: dict[str, Any],
-               live: Path, filem: Model) -> None:
+               live: Path, filem: Model, refm: Model) -> None:
     def fail(what: str) -> None:
         raise Refuse(f"внутренняя проверка не прошла ({what}) — {live} не тронут")
 
     try:
+        strict_decode(new_text, str(live))
         members, _, _ = root_members(new_text, str(live))
     except Refuse as e:
         raise Refuse(f"внутренняя проверка не прошла (новый текст не разбирается: {e})") from e
@@ -373,8 +412,10 @@ def check_post(text: str, new_text: str, old_head: str, old_tail: str, new_hooks
     if new_doc["hooks"] != new_hooks:
         fail("hooks нового текста не равен построенному")
     newm = to_model(new_doc["hooks"], str(live))
-    if foreign_lists(filem) != foreign_lists(newm):
-        fail("перечень чужих записей изменился")
+    if foreign_shape(filem) != foreign_shape(newm):
+        fail("чужие записи или прочие ключи их слотов изменились")
+    if analyze(refm, newm)[0]:
+        fail("после записи сверка с эталоном не пуста")
 
 
 def _write(path: Path, data: bytes, mode: int, *, exclusive: bool) -> None:
@@ -409,9 +450,13 @@ def replace_file(live: Path, data: bytes, new_data: bytes) -> Path:
     tmp = Path(f"{live}.{os.getpid()}.tmp")
     try:
         _write(tmp, new_data, mode, exclusive=False)
+        short = tmp.read_bytes() != new_data
     except OSError as e:
         _drop(tmp)
         raise Refuse(f"не записать рядом с {live} — {e.strerror or e}") from e
+    if short:
+        _drop(tmp)
+        raise Refuse(f"временный файл записался не целиком — {live} не тронут")
     try:
         _write(bak, data, mode, exclusive=True)
     except OSError as e:
@@ -427,18 +472,20 @@ def replace_file(live: Path, data: bytes, new_data: bytes) -> Path:
         raise Refuse(f"не записать рядом с {live} — {e.strerror or e}") from e
     except Refuse:
         _drop(tmp)
+        _drop(bak)
         raise
     return bak
 
 
 def run(live: Path, ref_path: Path, check: bool) -> int:
     text = read_text(live, "файл")
+    strict_decode(text, f"файл {live}")
     members, opened, close = root_members(text, str(live))
     if sum(m.key == "hooks" for m in members) > 1:
         raise Refuse(f"ключ hooks в корне {live} встречается больше одного раза")
     ref_text = read_text(ref_path, "эталон")
     try:
-        ref_doc = json.loads(ref_text, object_pairs_hook=_pairs_strict)
+        ref_doc = json.loads(ref_text, object_pairs_hook=_pairs_strict, parse_constant=_no_constant)
     except Dup as e:
         raise Refuse(f"эталон {ref_path}: ключ «{e.key}» дважды") from e
     except ValueError as e:
@@ -451,36 +498,38 @@ def run(live: Path, ref_path: Path, check: bool) -> int:
     if len(set(keys)) != len(keys):
         raise Refuse(f"эталон {ref_path}: дубль ключа записи (событие, matcher, command)")
 
+    for event, slots in refm.items():  # иначе dict по matcher глотает первый слот
+        seen = [m for m, _, _ in slots]
+        if len(set(seen)) != len(seen):
+            raise Refuse(f"эталон {ref_path}: в событии {event} два слота с одним matcher")
     had_hooks = any(m.key == "hooks" for m in members)
     old_hooks = members[[m.key for m in members].index("hooks")].value if had_hooks else {}
     filem = to_model(old_hooks, str(live)) if had_hooks else {}
     new_hooks = build(refm, old_hooks if had_hooks else ref_doc["hooks"], filem)
     lines, edits = analyze(refm, filem)
-    off = isinstance(old_hooks, dict) and "enabled" in old_hooks and old_hooks["enabled"] is not True
-    switch = f"hooks.enabled = {fmt(old_hooks['enabled'])}" if off else ""
+    switch = ""
+    if had_hooks and old_hooks.get("enabled") is not True:  # CLI: включено только `=== true`
+        switch = "hooks.enabled " + ("нет в файле" if "enabled" not in old_hooks
+                                     else f"= {fmt(old_hooks['enabled'])}")
 
     if check:
         if lines:
             print(f"⚠️  hooks в {live} расходятся с {ref_path}:")
             print("\n".join(lines))
-        if off:
-            print(f"    выключено {switch} — записи на месте, но ztui хуков не зовёт")
-        return 1 if lines or off else 0
-    if not lines and new_hooks == old_hooks and had_hooks:
-        if off:
-            print(f"⚠️  {switch} в {live} — выключатель владельца: записи на месте, "
-                  f"но ztui хуков не зовёт; install.sh его не трогает")
-        else:
-            print(f"✅ hooks в {live} равны {ref_path} — ничего не меняю")
+        if switch:
+            print(f"    выключено {switch} — ztui не зовёт ни один хук; install.sh выключатель не трогает")
+        return 1 if lines or switch else 0
+    if switch:
+        print(f"⚠️  {switch} в {live} — ztui не зовёт ни один хук; install.sh выключатель не трогает")
+    if not lines and had_hooks:  # иначе check молчит, а install пишет
+        print(f"✅ hooks в {live} равны {ref_path} — ничего не меняю")
         return 0
-    if off:
-        print(f"⚠️  {switch} в {live} — выключатель владельца: записи на месте, "
-              f"но ztui хуков не зовёт; install.sh его не трогает")
-    print("\n".join(edits))
     new_text, old_head, old_tail = splice(text, members, close, opened, new_hooks)
-    check_post(text, new_text, old_head, old_tail, new_hooks, live, filem)
+    check_post(text, new_text, old_head, old_tail, new_hooks, live, filem, refm)
     data = text.encode("utf-8")
     bak = replace_file(live, data, new_text.encode("utf-8"))
+    if edits:
+        print("\n".join(edits))
     print(f"📦 прежний файл: {bak}")
     return 0
 
