@@ -138,6 +138,21 @@ try:
               "ZCODE_PROJECT_DIR": repo}, cwd=repo, args=("wake",),
               absent="другие ящики")
 
+    # --- bl-wake: будильник отложки — строка счёта и молчание вне docflow -------
+    R = os.path.join(tmp, "blwake")
+    os.makedirs(os.path.join(R, "backlog"))
+    subprocess.run(["git", "init", "-q", R], check=True)
+    # кэш только что записан — свежий, фонового прогона хук не отцепляет
+    open(os.path.join(R, ".git", "bl-wake.cache"), "w", encoding="utf-8").write(
+        "📅 срок пересмотра FX-1 · Поправка (был 2026-09-26)\n"
+        "🟢 созрело FX-2 · Оплата одиночной ссылки пробила чек сама · маяк-будильника\n")
+    # absent задевает «📅 срок пересмотра» построчно, а строку счёта — нет: в ней
+    # «сроков пересмотра»
+    both_ways("bl-wake: 🟢 и строка счёта — JSON равен plain, 📂 построчно нет",
+              os.path.join(SC, "bl-wake.py"), {}, cwd=R, absent="срок пересмотра")
+    both_ways("bl-wake: вне docflow-репо — молчит в обоих",
+              os.path.join(SC, "bl-wake.py"), {}, cwd=tmp, allow_empty=True)
+
     # --- stale-root: падение сторожа и не-git каталог -------------------------
     nowhere = tempfile.mkdtemp(prefix="chk-emit-nowhere-")
     shutil.rmtree(nowhere)

@@ -21,18 +21,41 @@
 прошлого прогона из кэша (в общем git-каталоге, виден всем ворктри) и
 отцепляет свежий прогон в фон, если кэшу больше 30 минут.
 
-    bl-wake.py            хук: кэш + фоновое обновление
-    bl-wake.py --now      прогнать пробы сейчас и напечатать (руками)
+    bl-wake.py                   хук: кэш + фоновое обновление
+    bl-wake.py --overdue         то же, 📂 построчно
+    bl-wake.py --now             прогнать пробы сейчас и напечатать (руками)
+    bl-wake.py --now --overdue   прогнать и напечатать всё
+
+Форма (с 27.11.2026, DF-29): 🟢 и ⚪ — по строке и вперёд; 📂 — наступивший
+срок пересмотра, состояние, а не переход (в кэше gmb_v2 на 27.11.2026 —
+79 📂 против 14 🟢), поэтому одной строкой счёта по месяцам. Кэш хранит
+список целиком, форма применяется при печати.
+
+Контракты сред: Claude Code читает plain stdout, ZCode — только JSON
+{"additionalContext": …}, plain выбрасывает молча (обёртка emit(), канон
+паттерна — context-meter.py:emit). JSON — только в режиме хука: ручные
+ключи читает терминал, ему plain всегда. Печатается один раз: две печати
+ZCode не довезёт.
+
+Регистрация: Claude Code — проектный .claude/settings.json (docflow/setup.md,
+шаг 5); ZCode проектный слой хуков не читает (zcode-cli 0.18.0) — запись
+глобальная, ~/.zcode/cli/config.json → hooks.events.SessionStart, руками.
+Вне docflow-репо (нет backlog/) хук молчит сам, потому глобальная запись
+безвредна. Стенд — bl-wake-bite.sh, обёртку держит check-hook-emit.py.
 
 Скрипт исполняет пробы из файлов задач — это код из ТВОЕГО репозитория,
 та же модель доверия, что у `waiting.py`.
 """
 import datetime, json, os, re, subprocess, sys, time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
 TIMEOUT = 20
 STALE = 30 * 60
 BLOCK = re.compile(r"```when\s*\n(.*?)\n```", re.S)
+DUE = re.compile(r"\(был (\d{4})-(\d{2})-(\d{2})\)\s*$")
+MONTHS = ("январь февраль март апрель май июнь июль август "
+          "сентябрь октябрь ноябрь декабрь").split()
 
 
 def sh(argv, **kw):
@@ -133,6 +156,41 @@ def refresh(root):
     return [r for r in res if r]
 
 
+def emit(text, zcode):
+    """Вывод по контракту среды: Claude Code читает plain stdout, ZCode — только
+    JSON с additionalContext, plain она молча выбрасывает (канон паттерна —
+    hooks/context-meter.py:emit, замер 09.11.2026)."""
+    if zcode:
+        print(json.dumps({"additionalContext": text}, ensure_ascii=False))
+    else:
+        print(text)
+
+
+def summary(due):
+    """📂 одной строкой: сколько сроков наступило, с какого по какой, по месяцам;
+    дата не разобралась — ведро «без даты»."""
+    found = [DUE.search(l) for l in due]
+    got = [m.groups() for m in found if m and 1 <= int(m[2]) <= 12]
+    span = "–".join(f"{d}.{m}" for _, m, d in (min(got), max(got))) if got else "без дат"
+    by = Counter(int(m) for _, m, _ in got)
+    months = " · ".join(f"{MONTHS[k - 1]} {n}" for k, n in sorted(by.items()))
+    if len(got) < len(due):
+        months += f" · без даты {len(due) - len(got)}"
+    return (f"📅 наступивших сроков пересмотра {len(due)} ({span}): {months}; "
+            "построчно — bl-wake.py --overdue")
+
+
+def show(lines, full):
+    """Форма вывода: 🟢 вперёд, ⚪ за ними в порядке кэша, 📂 — одной строкой
+    счёта; full — список целиком, как хранится в кэше."""
+    if full:
+        return list(lines)
+    due = [l for l in lines if l.startswith("📅")]
+    ripe = [l for l in lines if l.startswith("🟢")]
+    rest = [l for l in lines if not l.startswith(("📅", "🟢"))]
+    return ripe + rest + ([summary(due)] if due else [])
+
+
 def main():
     root = sh(["git", "rev-parse", "--show-toplevel"]).stdout.strip()
     common = sh(["git", "rev-parse", "--path-format=absolute",
@@ -140,6 +198,7 @@ def main():
     if not root or not os.path.exists(os.path.join(root, "backlog")):
         return 0
     cache = os.path.join(common, "bl-wake.cache")
+    full = "--overdue" in sys.argv
     if "--now" in sys.argv or "--refresh" in sys.argv:
         lines = refresh(root)
         tmp = cache + ".tmp"
@@ -147,7 +206,7 @@ def main():
             fh.write("\n".join(lines))
         os.replace(tmp, cache)
         if "--now" in sys.argv:
-            print("\n".join(lines) if lines else "backlog: тихо")
+            emit("\n".join(show(lines, full)) or "backlog: тихо", False)
         return 0
     try:
         age = time.time() - os.path.getmtime(cache)
@@ -156,7 +215,9 @@ def main():
         age, lines = None, ""
     if lines:
         when = f"{int(age // 60)} мин назад" if age is not None else ""
-        print(f"backlog (пробы {when}):\n{lines}")
+        text = "\n".join([f"backlog (пробы {when}):",
+                          *show(lines.splitlines(), full)])
+        emit(text, bool(os.environ.get("ZCODE_SESSION_ID")))
     if age is None or age > STALE:
         subprocess.Popen([sys.executable, os.path.abspath(__file__), "--refresh"],
                          cwd=root, stdin=subprocess.DEVNULL,
