@@ -1,9 +1,11 @@
 ---
 id: DF-30
 title: 'install.sh: управление регистрацией zcode-хуков (~/.zcode/cli/config.json)'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@wb-waketails'
 created_date: '2026-11-27T18:48:41Z'
+updated_date: '2026-11-27T18:49:25Z'
 labels:
   - хук
 dependencies: []
