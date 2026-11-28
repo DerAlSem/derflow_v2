@@ -37,6 +37,13 @@ while [ $# -gt 0 ]; do
 done
 want() { [ -z "$ONLY" ] || [ "$ONLY" = "$1" ]; }
 
+# showdiff <аргументы diff>: напечатать расхождение, до 20 строк. Только печать:
+# непустой diff выходит не нулём, и под pipefail печать обрывала сценарий на
+# первом же расхождении (найдено 24.11.2026, DF-17) — в --check не проверялись
+# живые пути, копии и висячие, в install-режиме не раскладывались среды после
+# Claude Code. Расхождение фиксирует вызывающий (drift=1), статус печати погашен.
+showdiff() { diff "$@" | head -20 || true; }
+
 BACKUP="$HOME/backups/derflow-install-$(date +%Y%m%d-%H%M%S)"
 drift=0
 # Каталоги, куда link() кладёт симлинки. В --check по ним ищутся висячие (п. 7).
@@ -80,7 +87,7 @@ if [ "$CHECK" = 1 ]; then
   for h in claude zcode kimi-code kimi-work; do
     if ! diff -rq "$tmp/$h" "$REPO/hosts/$h/generated" >/dev/null; then
       echo "⚠️  hosts/$h/generated отстал от core/ + hosts/$h/ — прогони ./install.sh"
-      diff -r "$tmp/$h" "$REPO/hosts/$h/generated" | head -20
+      showdiff -r "$tmp/$h" "$REPO/hosts/$h/generated"
       drift=1
     fi
   done
@@ -114,8 +121,8 @@ sys.exit(0 if live == canon else 2)
 PY
   then
     echo "⚠️  hooks в settings.json расходятся с hosts/claude/settings.json (не линкуется — сверь руками):"
-    diff <(python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1]))['hooks'],indent=1,sort_keys=True))" "$REPO/hosts/claude/settings.json") \
-         <(python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1]))['hooks'],indent=1,sort_keys=True))" "$CLAUDE_DIR/settings.json") | head -20
+    showdiff <(python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1]))['hooks'],indent=1,sort_keys=True))" "$REPO/hosts/claude/settings.json") \
+            <(python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1]))['hooks'],indent=1,sort_keys=True))" "$CLAUDE_DIR/settings.json")
     [ "$CHECK" = 1 ] && drift=1
   fi
 fi

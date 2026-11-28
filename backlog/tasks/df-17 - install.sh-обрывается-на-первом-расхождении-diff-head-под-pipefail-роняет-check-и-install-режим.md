@@ -3,9 +3,11 @@ id: DF-17
 title: >-
   install.sh обрывается на первом расхождении: diff | head под pipefail роняет
   --check и install-режим
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@df-17'
 created_date: '2026-11-24T04:35:50Z'
+updated_date: '2026-11-28T06:58:58Z'
 labels: []
 dependencies: []
 documentation:
@@ -38,3 +40,25 @@ ordinal: 20000
 - [ ] #5 Оба расхождения держатся укусами в core/scripts/install-bite.sh: на install.sh до правки каждый укус красный, после правки — зелёный
 - [ ] #6 Живой ./install.sh --check в ~/dev/derflow после правки: «дрейфа нет», код 0
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Проверка по приказу владельца 28.11.2026: дефект на HEAD 0612291 воспроизведён в трёх контурах на копии HEAD в поддельном доме (stands/wb-mutants/dev/verify17-install.sh, запись out/verify17-before.txt, вне git): --check с разошедшимися hooks и с отставшим generated умирает на печати diff — свой висячий и пропавшая управляемая не названы, до «дрейф найден» не дошло; install-режим с разошедшимися hooks не доходит до zcode, opencode, kimi-code.
+2. Укусы вперёд, красные на прежнем install.sh: в core/scripts/install-bite.sh — hooks разошлись (--check доходит до «дрейф найден»; install-режим раскладывает остальные среды) и сборка отстала (--check на копии дерева: отставший generated заводится в копии, чекаут не пачкается).
+3. install.sh: печать расхождения — showdiff (diff … | head -20 || true): статус печати погашен, расхождение фиксирует вызывающий через drift=1. Остальное не меняется.
+4. Замер: укус на install.sh до правки (два новых красных, 16 прежних зелёные) и после (18 ❌ 0); doc-4 — абзац «Предел на 24.11.2026» переписан по факту.
+5. Приземление ff в main под замком, пуш, живой ./install.sh --check в корне, bl-done.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+28.11.2026, сессия C·28.10-df-open, ворктри df-17 (ветка df-17 от 0612291).
+Проверка по приказу владельца («сначала проверить, действительно ли код не в порядке»): на HEAD 0612291 дефект воспроизведён в трёх контурах на копии HEAD в поддельном доме (stands/wb-mutants/dev/verify17-install.sh, запись stands/wb-mutants/out/verify17-before.txt, вне git). A, --check с разошедшимися hooks: напечатал 11 строк diff и умер, код 1 — свой висячий и пропавшая управляемая не названы, до «дрейф найден» не дошло. B, --check с отставшим generated: умер после первой строки diff. C, install-режим с разошедшимися hooks: код 1, zcode, opencode и kimi-code не разложены.
+Сделано: install.sh — showdiff() после want(): diff … | head -20 || true; обе сверки (пункт 1, generated; пункт 2, hooks) печатают через неё, расхождение фиксирует drift=1. Остальное не тронуто.
+Укус core/scripts/install-bite.sh — две главы, семь укусов: hooks разошлись (--check; install-режим; два контроля с эталоном) и сборка отстала (копия рабочего состояния core, hosts, skills, tools, waiting, install.sh в своём поддельном доме, отставший generated — строка в конце generated/CLAUDE.md копии; чекаут не пачкается; --check; контроль).
+Замер, окончательные файлы: install.sh до правки (0612291) — ✅ 20 ❌ 3, красные ровно три отрицательных (stands/ib-df17/bite-before.txt); с правкой — ✅ 23 ❌ 0 (stands/ib-df17/bite-after.txt). Три контура на файле ворктри — все «да» (stands/ib-df17/verify17-after.txt).
+doc-4: абзац «Предел на 27.11.2026» заменён описанием; требование «при расхождении сценарий доходит до конца» с двумя сценариями (сборка отстала, hooks разошлись); абзац про укус дополнен.
+Не сделано (расщепление по контексту до приземления): AC не отмечены — доказательства #1–#5 в этом замере (#1, #2 — укус «сборка отстала, --check»; #3 — «hooks разошлись, --check»; #4 — «hooks разошлись, install-режим»; #5 — 20 ❌ 3 против 23 ❌ 0); AC #6 — живой --check в корне после приземления; итог; приземление; bl-done.
+<!-- SECTION:NOTES:END -->

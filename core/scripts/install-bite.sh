@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Стенд укуса install.sh: --check видит висячие симлинки на исчезнувшее из
-# репо (DF-16).
+# репо (DF-16); при расхождении сборки или hooks сценарий доходит до конца
+# (DF-17).
 #
 #   bash core/scripts/install-bite.sh
 #   INSTALL=/путь/к/install.sh bash core/scripts/install-bite.sh
@@ -31,6 +32,13 @@
 # положительную половину («install разложил», «пропажу управляемой видит»),
 # которую даёт любой работающий install.sh. Расхождение с числами после
 # правки укусов разбирать, а не переписывать молча.
+#
+# 🔴 ЗАМЕРЫ DF-17 (28.11.2026, 23 укуса: 16 прежних и семь в двух последних
+# главах). Красные до правки — ровно три отрицательных; контроль «копия дерева
+# разложила свой дом» зелёный и там, и там.
+#
+#   install.sh с правкой .................... ✅ 23 ❌ 0
+#   install.sh до правки (0612291) .......... ✅ 20 ❌ 3
 #
 # Оснастка та же: run гоняет install.sh и кладёт вывод в $out, код в $rc;
 # has/nohas смотрят $out; is печатает вердикт. Идиома вызова:
@@ -162,6 +170,68 @@ run --check --only claude --claude-dir "$S"
 is "стенд назвал своего и не заглянул ни в ~/.claude дома, ни в другие среды (AC #1, AC #3)" $?
 { unghost && [ ! -L "$S/skills/$G-stand" ] && [ -L "$S/CLAUDE.md" ]; }
 is "команда снятия с пробелом в пути исполняется и снимает ровно одну ссылку (AC #6)" $?
+
+echo "=== hooks разошлись: сценарий доходит до конца (DF-17) ==="
+
+# Обе сверки печатают расхождение как `diff … | head -20`, а под set -euo pipefail
+# непустой diff выходил не нулём — сценарий гиб на печати (24.11.2026): --check не
+# доходил до живых путей, копий и висячих, install-режим — до zcode, opencode и
+# kimi-code. Расхождение — лишняя группа в hooks живого settings.json; её команда
+# и есть метка напечатанного diff. Эталон стенд возвращает сам.
+cp "$H/.claude/settings.json" "$ROOT/settings.keep"
+python3 - "$H/.claude/settings.json" <<'PY'
+import json, sys
+p = sys.argv[1]; d = json.load(open(p))
+d.setdefault("hooks", {})["BiteDrift"] = [{"matcher": "x", "hooks": [{"type": "command", "command": "echo bite-drift"}]}]
+json.dump(d, open(p, "w"), indent=2, ensure_ascii=False)
+PY
+rm "$H/.zcode/AGENTS.md"                      # управляемую ссылку снимает стенд
+run --check
+{ [ "$rc" = 1 ] && has "hooks в settings.json расходятся" && has "bite-drift" \
+  && has "AGENTS.md — нет" && has "scripts/$G.sh" && has "дрейф найден"; }
+is "hooks разошлись, --check: предупреждение и diff напечатаны, пути и висячие проверены, «дрейф найден», код 1" $?
+rm -f "$H/.zcode/AGENTS.md" "$H/.config/opencode/AGENTS.md" "$H/.kimi-code/AGENTS.md"   # zcode снят выше: --check ссылку не возвращает
+run
+{ [ "$rc" = 0 ] && has "hooks в settings.json расходятся" && has "bite-drift" \
+  && [ -L "$H/.zcode/AGENTS.md" ] && [ -L "$H/.config/opencode/AGENTS.md" ] && [ -L "$H/.kimi-code/AGENTS.md" ]; }
+is "hooks разошлись, install-режим: предупреждение напечатано, остальные среды разложены до конца" $?
+cp "$ROOT/settings.keep" "$H/.claude/settings.json"      # эталон назад
+rm "$H/.zcode/AGENTS.md" "$H/.config/opencode/AGENTS.md" "$H/.kimi-code/AGENTS.md"
+run
+{ [ "$rc" = 0 ] && nohas "hooks в settings.json расходятся" \
+  && [ -L "$H/.zcode/AGENTS.md" ] && [ -L "$H/.config/opencode/AGENTS.md" ] && [ -L "$H/.kimi-code/AGENTS.md" ]; }
+is "контроль, hooks по эталону: install-режим без предупреждения раскладывает те же среды" $?
+run --check
+{ [ "$rc" = 1 ] && nohas "hooks в settings.json расходятся" && has "scripts/$G.sh" && has "дрейф найден"; }
+is "контроль, hooks по эталону: --check красен ровно висячим, предупреждения про hooks нет" $?
+
+echo "=== сборка отстала: --check доходит до конца (DF-17) ==="
+
+# Отставший generated не заводится в чекауте install.sh даже на время: чекаут
+# общий. Укус идёт по копии рабочего состояния (core, hosts, skills, tools,
+# waiting, install.sh) в своём поддельном доме; метка — строка в конце
+# hosts/claude/generated/CLAUDE.md, эталон для возврата — файл чекаута.
+C="$ROOT/copy"; HC="$ROOT/home-copy"
+rsync -a "$IREPO/core" "$IREPO/hosts" "$IREPO/skills" "$IREPO/tools" "$IREPO/waiting" "$C/"
+cp "$I" "$C/install.sh"
+mkdir -p "$HC/.claude" "$HC/.zcode/cli" "$HC/.config/opencode" "$HC/.kimi-code"
+cp "$IREPO/hosts/claude/settings.json" "$HC/.claude/settings.json"
+cp "$IREPO/hosts/zcode/hooks.json" "$HC/.zcode/cli/config.json"
+crun() { out="$(HOME="$HC" bash "$C/install.sh" "$@" 2>&1)"; rc=$?; }
+crun
+{ [ "$rc" = 0 ] && [ -L "$HC/.zcode/AGENTS.md" ]; }
+is "копия дерева разложила свой дом без отказа, код 0" $?
+echo "<!-- bite: отставшая сборка -->" >> "$C/hosts/claude/generated/CLAUDE.md"
+rm "$HC/.zcode/AGENTS.md"
+mkdir -p "$HC/.zcode/scripts"; ln -s "$C/core/scripts/$G-copy.sh" "$HC/.zcode/scripts/$G-copy.sh"
+crun --check
+{ [ "$rc" = 1 ] && has "hosts/claude/generated отстал" && has "bite: отставшая сборка" \
+  && has "AGENTS.md — нет" && has "$G-copy.sh" && has "дрейф найден"; }
+is "сборка отстала, --check: предупреждение и diff напечатаны, пути и висячие проверены, «дрейф найден», код 1" $?
+cp "$IREPO/hosts/claude/generated/CLAUDE.md" "$C/hosts/claude/generated/CLAUDE.md"
+crun --check
+{ [ "$rc" = 1 ] && nohas "generated отстал" && has "AGENTS.md — нет" && has "$G-copy.sh" && has "дрейф найден"; }
+is "контроль, сборка в согласии: --check красен ровно пропавшей управляемой и висячим" $?
 
 echo "=== стенд не пачкает репозиторий ==="
 
