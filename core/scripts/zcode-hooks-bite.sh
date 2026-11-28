@@ -20,13 +20,17 @@
 # после. Фикстуры — эталон с мутацией, ключ plugins в них отформатирован
 # не так, как пишет CLI: пересериализация всего файла это выдаст.
 #
-# 🔴 ЗАМЕРЫ (27.11.2026, 25 укусов). Каждая строка — отдельный прогон:
+# 🔴 ЗАМЕРЫ (28.11.2026, 32 укуса). Каждая строка — отдельный прогон:
 #
-#   zcode-hooks.py с правками ........... ✅ 25 ❌  0
-#   заглушка (exit 0, молчит) ........... ✅  0 ❌ 25
-#   мутация: is_derflow → True .......... ✅ 23 ❌  2   — глава «чужая запись», оба её укуса
-#   мутация: файл пересериализуется ..... ✅ 23 ❌  2   — «байты вне hooks»: правка и вставка ключа
-#   мутация: --check пишет .............. ✅ 24 ❌  1   — «--check не пишет»
+#   zcode-hooks.py с правками ...................... ✅ 32 ❌  0
+#   заглушка (exit 0, молчит) ...................... ✅  0 ❌ 32
+#   мутация: is_derflow → True ..................... ✅ 30 ❌  2   — глава «чужая запись», оба её укуса
+#   мутация: файл пересериализуется ................ ✅ 30 ❌  2   — «байты вне hooks»: правка и вставка ключа
+#   мутация: --check пишет ......................... ✅ 31 ❌  1   — «--check не пишет»
+#   мутация: живой файл не сверяется со схемой ..... ✅ 28 ❌  4   — глава «файл, который CLI не читает», все четыре укуса об отказе
+#   мутация: не замечает пропавшей записи .......... ✅ 20 ❌ 12   — семья «записи нет», все её 12 укусов
+#   мутация: не видит расхождения matcher .......... ✅ 30 ❌  2   — «расходится matcher», оба её укуса
+#   мутация: не снимает лишнюю ..................... ✅ 30 ❌  2   — «лишняя запись derflow», оба её укуса
 #
 # Расхождение с числами после правки укусов или хелпера разбирать, а не
 # переписывать молча.
@@ -63,6 +67,7 @@ ref = json.load(open(sys.argv[2]))["hooks"] if len(sys.argv) > 2 else None
 OURS = ("/.claude/scripts/", "/.claude/hooks/", "/.zcode/hooks/")
 FOREIGN_UP = "echo stand-foreign-up"
 FOREIGN_PT = "echo stand-foreign-pt"
+FOREIGN_END = "echo stand-foreign-end"
 # plugins не так, как пишет CLI: отступ 4, лишние пробелы
 PLUGINS = ('{\n  "plugins": {\n      "enabledPlugins": {\n'
            '    "computer-use@zcode-plugins-official": true,\n'
@@ -91,6 +96,14 @@ def fixture(kind):
         drop(ss, "bl-wake")
         ups.append({"type": "command", "command": FOREIGN_UP, "timeout": 3})
         pt[1]["hooks"].append({"type": "command", "command": FOREIGN_PT, "async": True})
+    elif kind == "unknown":                     # событие вне семи имён: CLI не читает весь файл
+        ev["SessionEnd"] = [{"hooks": [{"type": "command", "command": FOREIGN_END}]}]
+    elif kind == "slotkey":                     # в слоте ключ вне matcher и hooks
+        ev["Stop"][0]["stand-extra"] = "note"
+    elif kind == "empty":                       # у слота пустой список hooks
+        ev["Stop"].append({"matcher": "Bash", "hooks": []})
+    elif kind == "off":                         # выключатель: иначе всё как в эталоне
+        h["enabled"] = False
     elif kind == "decoy":
         drop(ss, "canon-budget")
     else:
@@ -159,6 +172,8 @@ elif cmd == "foreign-in-place":
           and ev["PreToolUse"][1]["hooks"][-1] == {"type": "command", "command": FOREIGN_PT, "async": True}
           and len(theirs) == 2)
     sys.exit(0 if ok else 1)
+elif cmd == "enabled-off":
+    sys.exit(0 if json.load(open(a[0])).get("hooks", {}).get("enabled") is False else 1)
 elif cmd == "mode":
     sys.exit(0 if os.path.exists(a[0]) and oct(os.stat(a[0]).st_mode & 0o777) == "0o600" else 1)
 elif cmd == "fp":
@@ -275,6 +290,48 @@ again foreign
 run; moved "$ROOT/foreign.json"
 { [ "$rc" = 0 ] && fx derflow-eq-ref "$C" && fx foreign-in-place "$C" && nohas "stand-foreign"; }
 is "после install чужие на месте в прежнем порядке, наши равны эталону, чужое не напечатано (AC #4)" $?
+
+echo "=== файл, который CLI не читает ==="
+
+# Схема CLI строже эталона: чужое событие, лишний ключ слота, пустой hooks —
+# и CLI читает весь файл пустым. Отказ обязан назвать место и не тронуть файл;
+# «не тронут» и заглушке зелёно, поэтому каждый укус спаян с «названо».
+again unknown; cp -p "$C" "$ROOT/unknown.json"; f="$(fx fp "$C")"
+run --check
+{ [ "$rc" != 0 ] && has "SessionEnd" && has "по схеме CLI" && has "без хуков и плагинов" \
+  && has "install её не трогает" && cmp -s "$C" "$ROOT/unknown.json" && [ "$(nbak)" = 0 ]; }
+is "событие вне семи имён: --check называет его, схему и цену, код не 0, файл байт в байт (DF-30.1 AC #1, #3)" $?
+run
+{ [ "$rc" != 0 ] && has "SessionEnd" && [ "$(fx fp "$C")" = "$f" ] && [ "$(nbak)" = 0 ] && [ "$(ntmp)" = 0 ]; }
+is "событие вне семи имён: install отказывает, файл и mtime прежние, копии нет (DF-30.1 AC #1)" $?
+again slotkey; cp -p "$C" "$ROOT/slotkey.json"
+run --check
+{ [ "$rc" != 0 ] && has "Stop [без matcher], слот 1" && has "«stand-extra»" \
+  && cmp -s "$C" "$ROOT/slotkey.json" && [ "$(nbak)" = 0 ]; }
+is "лишний ключ слота: --check называет слот и ключ, код не 0, файл цел (DF-30.1 AC #2, #3)" $?
+again empty; cp -p "$C" "$ROOT/empty.json"; f="$(fx fp "$C")"
+run
+{ [ "$rc" != 0 ] && has "Stop [Bash], слот 2" && has "список hooks пуст" \
+  && [ "$(fx fp "$C")" = "$f" ] && [ "$(nbak)" = 0 ]; }
+is "пустой hooks у слота: install отказывает, называет слот, файл и mtime прежние, копии нет (DF-30.1 AC #2)" $?
+again unknown; cp -p "$C" "$ROOT/unknown.json"
+printf '{"hooks": {"enabled": true, "events": {"SessionEnd": [{"hooks": [{"type": "command", "command": "echo x"}]}]}}}\n' > "$ROOT/badref2.json"
+out="$(HOME="$H" python3 "$HOOKS" "$C" "$ROOT/badref2.json" --check 2>&1)"; rc=$?   # эталон вне схемы, напрямую
+{ [ "$rc" != 0 ] && has "эталон $ROOT/badref2.json" && nohas "файл $C" && cmp -s "$C" "$ROOT/unknown.json"; }
+is "эталон вне схемы: отказ раньше и вместо разбора живого файла; файл цел (DF-30.1 AC #4)" $?
+
+echo "=== выключатель ==="
+
+# hooks.enabled = false: CLI не зовёт ни один хук. install.sh выключатель не
+# трогает — обе печати обязаны сказать, как включить; это даёт только хелпер.
+again off; cp -p "$C" "$ROOT/off.json"; f="$(fx fp "$C")"
+run --check
+{ [ "$rc" = 1 ] && has "выключено" && has "hooks.enabled: true" && cmp -s "$C" "$ROOT/off.json" && [ "$(nbak)" = 0 ]; }
+is "hooks.enabled = false: --check печатает «выключено» и как включить, код 1, файл не пишет (DF-30.1 AC #5)" $?
+run
+{ [ "$rc" = 0 ] && has "не зовёт ни один хук" && has "hooks.enabled: true" && has "ничего не меняю" \
+  && [ "$(fx fp "$C")" = "$f" ] && [ "$(nbak)" = 0 ] && fx enabled-off "$C"; }
+is "hooks.enabled = false: install предупреждает и говорит, как включить; не пишет, код 0, выключатель на месте (DF-30.1 AC #5)" $?
 
 echo "=== отказы ==="
 
