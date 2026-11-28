@@ -12,6 +12,9 @@
     в прежнем порядке;
     любой отказ безопаснее правки наугад: не понял форму — не пишу.
 
+    hooks, не проходящий схему CLI (событие вне семи, лишний ключ слота,
+    пустой список записей), — отказ в обоих режимах: CLI читает такой файл
+    пустым целиком, без хуков и плагинов;
 Чья запись derflow: хотя бы один токен команды (по пробельным) после
 раскрытия `$HOME`/`~` начинается с ~/.claude/scripts/, ~/.claude/hooks/
 или ~/.zcode/hooks/ — это каталоги, которые раскладывает install.sh.
@@ -41,6 +44,7 @@ NONE = object()  # поля нет в объекте
 # запись); лишнее там CLI отвергает вместе со всем пользовательским файлом
 EVENTS = ("SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest",
           "PostToolUse", "PostToolUseFailure", "Stop")
+CLI_SCHEMA = "0.18.x"  # исходники, по которым сверены EVENTS и форма слота
 
 Slot = tuple["str | None", list[dict[str, Any]], dict[str, Any]]  # (matcher, записи, сам слот)
 Model = dict[str, list[Slot]]  # событие -> слоты в порядке файла
@@ -276,6 +280,26 @@ def field_diff(a: dict[str, Any], b: dict[str, Any]) -> list[tuple[str, Any, Any
     return [(k, a.get(k, NONE), b.get(k, NONE)) for k in keys if a.get(k, NONE) != b.get(k, NONE)]
 
 
+def schema_faults(model: Model) -> list[str]:
+    """Где hooks не проходит схему CLI — по месту, в порядке файла.
+
+    Те же три правила, что reference=True держит с эталона: событие из EVENTS,
+    в слоте только matcher и hooks, список hooks непуст.
+    """
+    out: list[str] = []
+    for event, slots in model.items():
+        if event not in EVENTS:
+            out.append(f"событие {event} — вне схемы, CLI его не знает")
+        for n, (matcher, records, slot) in enumerate(slots, 1):
+            place = f"событие {where(event, matcher)}, слот {n}"
+            extra = [k for k in slot if k not in ("matcher", "hooks")]
+            if extra:
+                out.append(f"{place} — лишний ключ " + ", ".join(f"«{k}»" for k in extra))
+            if not records:
+                out.append(f"{place} — список hooks пуст")
+    return out
+
+
 def analyze(refm: Model, filem: Model) -> tuple[list[str], list[str]]:
     """Строки сверки «нет / иная / лишняя» и парные им строки правок."""
     lines: list[str] = []
@@ -505,6 +529,11 @@ def run(live: Path, ref_path: Path, check: bool) -> int:
     had_hooks = any(m.key == "hooks" for m in members)
     old_hooks = members[[m.key for m in members].index("hooks")].value if had_hooks else {}
     filem = to_model(old_hooks, str(live)) if had_hooks else {}
+    faults = schema_faults(filem)
+    if faults:  # файл непригоден для CLI независимо от записей derflow
+        raise Refuse(f"файл {live} не проходит по схеме CLI {CLI_SCHEMA} — CLI читает весь "
+                     "пользовательский файл как пустой: без хуков и плагинов; это не запись "
+                     "derflow, install её не трогает:\n" + "\n".join(f"    {one}" for one in faults))
     new_hooks = build(refm, old_hooks if had_hooks else ref_doc["hooks"], filem)
     lines, edits = analyze(refm, filem)
     switch = ""
@@ -517,10 +546,12 @@ def run(live: Path, ref_path: Path, check: bool) -> int:
             print(f"⚠️  hooks в {live} расходятся с {ref_path}:")
             print("\n".join(lines))
         if switch:
-            print(f"    выключено {switch} — ztui не зовёт ни один хук; install.sh выключатель не трогает")
+            print(f"    выключено {switch} — ztui не зовёт ни один хук; включить — руками:"
+                  " hooks.enabled: true; install.sh выключатель не трогает")
         return 1 if lines or switch else 0
     if switch:
-        print(f"⚠️  {switch} в {live} — ztui не зовёт ни один хук; install.sh выключатель не трогает")
+        print(f"⚠️  {switch} в {live} — ztui не зовёт ни один хук; включить — руками:"
+              " hooks.enabled: true; install.sh выключатель не трогает")
     if not lines and had_hooks:  # иначе check молчит, а install пишет
         print(f"✅ hooks в {live} равны {ref_path} — ничего не меняю")
         return 0
