@@ -34,6 +34,17 @@ ZCODE_SESSION_ID, выводы равны. METER= заглушка — ✅ 0 ❌
 исключение по любой из двух полос — ✅ 15 ❌ 9 (B, Dx, C, F в обоих контрактах
 и №3: снято точное сравнение по первому токену); хук без JSON в контракте
 ZCode — ✅ 17 ❌ 7 (все семь строк ZCode); детектор выключен — ✅ 12 ❌ 12.
+
+🔴 Закалка матрицы по ревью (28.11.2026, DF-37). Строка Ops обоих контрактов —
+формой шаблона канона, в бэктиках; «молчит» — подстроки «вторая полоса» нет в
+выводе целиком; «печатает» — полный текст lane2_msg(). Две мутации проходили
+✅ 24 ❌ 0, теперь краснят ровно свои строки: снятый replace бэктиков —
+✅ 22 ❌ 2 (обе строки Ops); сокращённый текст lane2_msg() — ✅ 16 ❌ 8 (B, Dx,
+C, F в обоих контрактах). У остальных мутаций числа прежние; из ворктри —
+✅ 24 ❌ 0 в тех же трёх средах, выводы равны. Шесть мутаций проходят и после
+— стенд их не держит: делитель только пробел (полоса со слитным `·` или `(`),
+последний анонс вместо второго, сравнение без регистра, снятый strip
+звёздочек, защёлка до проверки полосы, порог и вторая полоса не в одном вызове.
 """
 import json, os, re, shutil, subprocess, sys, tempfile
 
@@ -192,31 +203,49 @@ def zctx(out):
 
 # Исключение смотрит только на ВТОРУЮ полосу, поэтому первая в матрице — Ops
 # всюду, кроме строки самой Ops: «Ops, затем B» обязано печатать.
-LANES = (("Ops", False), ("B", True), ("A", False), ("D · консультация", False),
-         ("Dx", True), ("C", True), ("F", True))
+# Строка Ops — формой шаблона канона, в бэктиках (`SKILL.md`: «Lane `<id>` → …»):
+# хук снимает бэктики отдельным replace, а голое слово эту ветку не проверяет —
+# мутант без replace проходил ✅ 24 ❌ 0. Остальные строки — голым словом, как
+# пишет большинство сессий. Элементы строки: написание в анонсе, полоса,
+# которую называет печать, печатает ли.
+LANES = (("`Ops`", "Ops", False), ("B", "B", True), ("A", "A", False),
+         ("D · консультация", "D", False), ("Dx", "Dx", True), ("C", "C", True),
+         ("F", "F", True))
 UZ, LOUDZ = {"inputTokens": 50_010}, {"inputTokens": 400_000}
 ZHOME = tempfile.mkdtemp(prefix="ctxmeter-zcode-")
 mx_sids = []
+
+def want(lane, hand):
+    """Полный текст lane2_msg() — по памяти стенда, не из хука: сокращённый или
+    переписанный текст печати обязан покраснеть, иначе «текст тот же» не держит
+    ни одна проба."""
+    return (f"‼ {SPEAK} в сессии ({lane}) — она открывается НОВОЙ сессией: "
+            f"допиши хендофф до «здесь и сейчас» и позови ~/{hand} <каталог> [файл] "
+            f"(derflow/SKILL.md)")
+
 try:
     for contract in ("Claude Code", "ZCode"):
         hand = ".zcode/scripts/hand.sh" if contract == "ZCode" else ".claude/scripts/hand.sh"
-        for lane, speak in LANES:
+        for form, lane, speak in LANES:
             first = "Dx" if lane == "Ops" else "Ops"
-            sid = "t-mx-" + lane.split(" ")[0].lower()
+            sid = "t-mx-" + lane.lower()
             if contract == "ZCode":
                 recs = [zturn(f"Lane {first} → x — потому что", UZ),
-                        zturn(f"Lane {lane} → x — потому что", UZ)]
+                        zturn(f"Lane {form} → x — потому что", UZ)]
                 out = zctx(run_z(recs + ([] if speak else [zturn("что-то", LOUDZ)]), sid + "-z"))
             else:
                 recs = [turn(f"Lane {first} → x — потому что", U),
-                        turn(f"Lane {lane} → x — потому что", U)]
+                        turn(f"Lane {form} → x — потому что", U)]
                 mx_sids.append(sid); unhook(sid)
                 out = run(recs + ([] if speak else [turn("что-то", LOUD)]), sid)
-            # Печать опознаётся с полосой в скобках — так её пишет lane2_msg().
-            got = f"{SPEAK} в сессии ({lane.split(' ')[0]})" in out
-            judge(f"{contract}: вторая полоса {lane} — "
+            # «Печатает» — полный текст lane2_msg(). «Молчит» — подстроки
+            # «вторая полоса» в выводе нет целиком, а не только с этой полосой
+            # в скобках: печать с другой полосой в скобках — тоже печать.
+            got = want(lane, hand) in out
+            judge(f"{contract}: вторая полоса {form} — "
                   f"{'печатает' if speak else 'молчит, о пороге сказано'}",
-                  got == speak and hand in out and (speak or "‼ расщепи сессию САМ" in out))
+                  (got if speak else SPEAK not in out) and hand in out
+                  and (speak or "‼ расщепи сессию САМ" in out))
 finally:
     shutil.rmtree(ZHOME, ignore_errors=True)
 
