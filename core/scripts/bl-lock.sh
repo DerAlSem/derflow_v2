@@ -17,6 +17,17 @@ locks="$common/bl-locks"
 mkdir -p "$locks"
 branch="$(git rev-parse --abbrev-ref HEAD)"
 
+# ID приводится к полному (DF-12) — так назван каталог замка. Аргументом приходит и короткий
+# (12): CLI понимает обе формы, каталог — только одну. 28.11.2026 «bl-done.sh 35» печатал
+# «замок снят», снимая несуществующий bl-locks/35 при живом bl-locks/DF-35; «take 12» рядом
+# с «take DF-12» пускал второго держателя. Один раз, для всякой подкоманды с ID.
+case "${1:-who}" in
+  take|drop|release)
+    id="$(backlog task view "${2:?нужен ID задачи}" --json | python3 -c '
+import json, sys
+print(json.load(sys.stdin)["task"]["id"])')" ;;
+esac
+
 age() {  # секунды → «3ч 12м»
   local s=$(( $(date +%s) - $1 ))
   printf '%dч %02dм' $((s / 3600)) $((s % 3600 / 60))
@@ -24,7 +35,6 @@ age() {  # секунды → «3ч 12м»
 
 case "${1:-who}" in
   take)
-    id="${2:?нужен ID задачи}"
     who="${3:-$branch}"
     if ! mkdir "$locks/$id" 2>/dev/null; then
       echo "🔒 $id уже взята:" >&2
@@ -67,13 +77,12 @@ case "${1:-who}" in
     if [ "$n" -eq 0 ]; then echo "замков нет"; fi
     ;;
   drop)
-    id="${2:?нужен ID задачи}"
     backlog task edit "$id" -s "To Do" -a "" --plain | head -1
     rm -rf "${locks:?}/$id"
     echo "↩ $id возвращена в To Do, замок снят"
     ;;
   release)  # только для bl-done.sh
-    rm -rf "${locks:?}/${2:?}"
+    rm -rf "${locks:?}/${id:?}"
     ;;
   *) echo "bl-lock.sh take|who|drop" >&2; exit 1 ;;
 esac
