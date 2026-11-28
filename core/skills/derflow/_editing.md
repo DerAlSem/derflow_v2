@@ -33,3 +33,11 @@
 `~/dev/derflow` (живой канон всех сред) общий на все сессии сразу, конфликта git не будет: перезапишешь
 чужую главу молча. Правило — `_parallel.md`, глава «Изоляция ворктри достаёт
 не везде»; замер — `archive/isolation-surfaces.md`.
+
+## После правки — копия Kimi Work → archive/isolation-surfaces.md
+
+daimon Kimi Work не ходит по симлинкам каталогов скиллов, и `install.sh` (блок 6) держит
+побайтную копию `core/skills/derflow` и `docflow`; правка под `core/skills/` её не трогает,
+и `./install.sh --check` печатает «kimi-work: skills/derflow отстал от core» — хендофф с
+условием «дрейфа нет» не закрывается. Лечит `./install.sh --only kimi-work` из КОРНЯ, после
+влития, затем `--check`; из ворктри не звать: в копию уйдёт ветка. Дрейф бывает и чужим — та же команда.
