@@ -23,8 +23,19 @@ ztui, в чистой среде и с подложенным ZCODE_SESSION_ID �
 копии: возвращённый путь через ~/.claude и вызов мимо H — по ✅ 9 ❌ 1, ровно
 укус про файл; снятый env.pop в run() — из ztui ✅ 9 ❌ 1 (проба про порог), из
 чистой среды ✅ 10 ❌ 0. Сломанный хук ворктри: из ворктри ✅ 6 ❌ 4.
+
+🔴 Исключение Ops (28.11.2026, DF-37; 24 пробы). В конце прогона — матрица
+«вторая полоса × контракт»: Ops, B, A, D, Dx, C, F в контракте Claude Code и
+те же семь в контракте ZCode (вторая воронка, run_z: хук читает rollout из
+подменённого HOME). Новый стенд против хука до правки — ✅ 22 ❌ 2, обе строки
+Ops. После: ✅ 24 ❌ 0 в шелле ztui, в чистой среде и с подложенным
+ZCODE_SESSION_ID, выводы равны. METER= заглушка — ✅ 0 ❌ 24. Мутации копии:
+лишняя B в STAY — ✅ 20 ❌ 4 (№1, укус про файл, B в обоих контрактах);
+исключение по любой из двух полос — ✅ 15 ❌ 9 (B, Dx, C, F в обоих контрактах
+и №3: снято точное сравнение по первому токену); хук без JSON в контракте
+ZCode — ✅ 17 ❌ 7 (все семь строк ZCode); детектор выключен — ✅ 12 ❌ 12.
 """
-import json, os, re, subprocess, sys, tempfile
+import json, os, re, shutil, subprocess, sys, tempfile
 
 # 🔴 Испытываемый файл — ИЗ СВОЕГО ЧЕКАУТА: от __file__ физическим путём; хук
 # лежит уровнем выше (стенд — в core/scripts, хук — в core/hooks). METER=
@@ -147,6 +158,68 @@ out = run([turn("что-то", LOUD)], sid)
 judge("порог 300k не сломан, вывод — контракт Claude Code",
       "‼ расщепи сессию САМ" in out and ".claude/scripts/hand.sh" in out
       and not any(line.startswith("{") for line in out.splitlines()))
-for sid in sids + ["t-latch", "t-loud"]: unhook(sid)
+
+# 🔴 Матрица «вторая полоса × контракт» (28.11.2026, DF-37). Исключение Ops —
+# решение владельца: деплой едет следом за сборкой, и контекст сборки нужен.
+# Каждое «молчит» стоит рядом с парным «B — печатает» и с ходом контекстом 400k.
+# До правки хук гонялся только в контракте Claude Code: run() снимает
+# ZCODE_SESSION_ID, а в контракте ZCode хук читает не transcript_path, а
+# ~/.zcode/cli/rollout/model-io-<session_id>.jsonl. Подложить свой файл в живой
+# rollout — засорить чужие замеры, поэтому дочернему процессу подменяется HOME:
+# и rollout, и защёлки ложатся во временную папку. Запись — формата ZCode:
+# querySource main_turn, текст хода в response.text, контекст в
+# response.usage.inputTokens.
+def zturn(text=None, usage=None):
+    rec = {"querySource": "main_turn",
+           "response": {"text": text or "", "usage": usage or {}}}
+    return json.dumps(rec, ensure_ascii=False)
+
+def run_z(records, sid):
+    d = os.path.join(ZHOME, ".zcode", "cli", "rollout"); os.makedirs(d, exist_ok=True)
+    open(os.path.join(d, f"model-io-{sid}.jsonl"), "w", encoding="utf-8").write(
+        "\n".join(records) + "\n")
+    env = dict(os.environ, HOME=ZHOME, ZCODE_SESSION_ID=sid)
+    p = subprocess.run([sys.executable, H, "--tool"], input=json.dumps(
+        {"session_id": sid, "cwd": "/tmp"}), capture_output=True, text=True, env=env)
+    return p.stdout.strip()
+
+def zctx(out):
+    """Текст из JSON-строки контракта ZCode; не JSON — пусто, и проба краснеет."""
+    try:
+        return json.loads(out)["additionalContext"]
+    except (ValueError, KeyError, TypeError):
+        return ""
+
+# Исключение смотрит только на ВТОРУЮ полосу, поэтому первая в матрице — Ops
+# всюду, кроме строки самой Ops: «Ops, затем B» обязано печатать.
+LANES = (("Ops", False), ("B", True), ("A", False), ("D · консультация", False),
+         ("Dx", True), ("C", True), ("F", True))
+UZ, LOUDZ = {"inputTokens": 50_010}, {"inputTokens": 400_000}
+ZHOME = tempfile.mkdtemp(prefix="ctxmeter-zcode-")
+mx_sids = []
+try:
+    for contract in ("Claude Code", "ZCode"):
+        hand = ".zcode/scripts/hand.sh" if contract == "ZCode" else ".claude/scripts/hand.sh"
+        for lane, speak in LANES:
+            first = "Dx" if lane == "Ops" else "Ops"
+            sid = "t-mx-" + lane.split(" ")[0].lower()
+            if contract == "ZCode":
+                recs = [zturn(f"Lane {first} → x — потому что", UZ),
+                        zturn(f"Lane {lane} → x — потому что", UZ)]
+                out = zctx(run_z(recs + ([] if speak else [zturn("что-то", LOUDZ)]), sid + "-z"))
+            else:
+                recs = [turn(f"Lane {first} → x — потому что", U),
+                        turn(f"Lane {lane} → x — потому что", U)]
+                mx_sids.append(sid); unhook(sid)
+                out = run(recs + ([] if speak else [turn("что-то", LOUD)]), sid)
+            # Печать опознаётся с полосой в скобках — так её пишет lane2_msg().
+            got = f"{SPEAK} в сессии ({lane.split(' ')[0]})" in out
+            judge(f"{contract}: вторая полоса {lane} — "
+                  f"{'печатает' if speak else 'молчит, о пороге сказано'}",
+                  got == speak and hand in out and (speak or "‼ расщепи сессию САМ" in out))
+finally:
+    shutil.rmtree(ZHOME, ignore_errors=True)
+
+for sid in sids + ["t-latch", "t-loud"] + mx_sids: unhook(sid)
 print(f"\nитог: ✅ {good_n} ❌ {bad_n}")
 sys.exit(0 if ok else 1)
